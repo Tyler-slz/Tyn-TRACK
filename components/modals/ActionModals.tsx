@@ -46,6 +46,9 @@ export function ActionModals() {
     toggleTheme,
     todayLocalStr,
     prefilledTime,
+    isInstallable,
+    isStandalone,
+    promptInstallApp,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -268,6 +271,42 @@ export function ActionModals() {
                   }`}
                 />
               </button>
+            </div>
+
+            {/* Install App on Phone Banner */}
+            <div
+              className={`rounded-2xl p-4 border space-y-3 transition-all ${
+                isDark ? 'bg-[#1B2720] border-[#27382E]' : 'bg-[#EDF4EC] border-[#D9E6D7]'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <div className={`w-9 h-9 rounded-2xl flex items-center justify-center ${
+                  isDark ? 'bg-[#27382D] text-[#7CC79E]' : 'bg-[#DCE9DA] text-[#274E3C]'
+                }`}>
+                  <Download className="w-4 h-4 stroke-[2]" />
+                </div>
+                <div>
+                  <p className={`text-[14px] font-semibold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                    {isStandalone ? 'App is Installed' : 'Install Life Flow App'}
+                  </p>
+                  <p className={`text-[11px] ${isDark ? 'text-[#8EA397]' : 'text-[#64796B]'}`}>
+                    {isStandalone
+                      ? 'Running in full-screen standalone app mode.'
+                      : 'Add to home screen for 1-tap full-screen access.'}
+                  </p>
+                </div>
+              </div>
+
+              {!isStandalone && (
+                <button
+                  type="button"
+                  onClick={promptInstallApp}
+                  className="w-full py-2.5 px-3 rounded-xl bg-[#274E3C] hover:bg-[#1E3F30] text-white text-[13px] font-semibold tracking-wide shadow-sm flex items-center justify-center space-x-1.5 active:scale-95 transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Install App on Phone</span>
+                </button>
+              )}
             </div>
 
             {/* Offline Storage Notice */}
@@ -1006,6 +1045,69 @@ export function ActionModals() {
               <span>{entryType === 'savings' ? 'Save to vault' : 'Save entry'}</span>
             </button>
           </form>
+        )}
+
+        {/* Modal: How to Install App Guide */}
+        {activeModal === 'install-guide' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-[11px] font-semibold tracking-widest uppercase ${isDark ? 'text-[#879B90]' : 'text-[#7B867E]'}`}>
+                  1-Tap Full Screen Access
+                </p>
+                <h2 className={`text-[26px] font-bold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                  Install App
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeModal}
+                className={`w-9 h-9 rounded-full border flex items-center justify-center ${
+                  isDark ? 'bg-[#202C25] border-[#2F3F36] text-[#8EA397]' : 'bg-white border-[#E3E8E1] text-[#69796D]'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className={`text-[13px] leading-relaxed ${isDark ? 'text-[#A0B5A7]' : 'text-[#586A5E]'}`}>
+              Install Life Flow as a native Progressive Web App (PWA) to run in full screen without browser bars.
+            </p>
+
+            {/* iOS Instructions */}
+            <div className={`p-4 rounded-2xl border space-y-2 ${isDark ? 'bg-[#1C2620] border-[#293A2F]' : 'bg-white border-[#ECECE6]'}`}>
+              <div className="flex items-center space-x-2">
+                <span className="text-[14px]">🍎</span>
+                <h4 className="text-[14px] font-bold">On iPhone / iPad (Safari)</h4>
+              </div>
+              <ol className={`text-[12px] space-y-1.5 list-decimal pl-4 leading-relaxed ${isDark ? 'text-[#CAD7CE]' : 'text-[#485B4E]'}`}>
+                <li>Tap the <strong>Share</strong> button at the bottom (the square with an arrow pointing up).</li>
+                <li>Scroll down and tap <strong>"Add to Home Screen"</strong> (➕).</li>
+                <li>Tap <strong>Add</strong> in the top right. An app icon will appear on your home screen!</li>
+              </ol>
+            </div>
+
+            {/* Android Instructions */}
+            <div className={`p-4 rounded-2xl border space-y-2 ${isDark ? 'bg-[#1C2620] border-[#293A2F]' : 'bg-white border-[#ECECE6]'}`}>
+              <div className="flex items-center space-x-2">
+                <span className="text-[14px]">🤖</span>
+                <h4 className="text-[14px] font-bold">On Android (Chrome / Samsung)</h4>
+              </div>
+              <ol className={`text-[12px] space-y-1.5 list-decimal pl-4 leading-relaxed ${isDark ? 'text-[#CAD7CE]' : 'text-[#485B4E]'}`}>
+                <li>Tap the <strong>three dots (⋮)</strong> menu in the top-right corner.</li>
+                <li>Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+                <li>Confirm by tapping <strong>Install</strong>.</li>
+              </ol>
+            </div>
+
+            <button
+              type="button"
+              onClick={closeModal}
+              className="w-full py-3.5 rounded-2xl bg-[#274E3C] text-white text-[14px] font-semibold tracking-wide shadow-sm"
+            >
+              Got it, thanks!
+            </button>
+          </div>
         )}
       </div>
     </div>

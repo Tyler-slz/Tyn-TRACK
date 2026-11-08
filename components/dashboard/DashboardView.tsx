@@ -17,7 +17,8 @@ import {
   Briefcase,
   User,
   Plus,
-  PenLine
+  PenLine,
+  Download
 } from 'lucide-react';
 
 export function DashboardView() {
@@ -31,6 +32,8 @@ export function DashboardView() {
     toggleTheme,
     saveDailyNote,
     todayLocalStr,
+    isStandalone,
+    promptInstallApp,
   } = useApp();
 
   const isDark = theme === 'dark';
@@ -91,6 +94,37 @@ export function DashboardView() {
           </button>
         </div>
       </div>
+
+      {/* Install App Quick Pill (only shows when browsing in browser, hidden once installed) */}
+      {!isStandalone && (
+        <div
+          onClick={promptInstallApp}
+          className={`cursor-pointer rounded-2xl p-3 border shadow-soft-sm flex items-center justify-between transition-all active:scale-[0.99] ${
+            isDark
+              ? 'bg-[#18231D] border-[#25362B] text-[#EDEFEA] hover:bg-[#1E2C24]'
+              : 'bg-[#EFF5EE] border-[#DEE8DD] text-[#1E2621] hover:bg-[#E7EFE6]'
+          }`}
+        >
+          <div className="flex items-center space-x-2.5">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                isDark ? 'bg-[#25362C] text-[#7CC79E]' : 'bg-[#DDE9DC] text-[#274E3C]'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <p className="text-[12px] font-semibold leading-tight">Install Life Flow</p>
+              <p className={`text-[10px] ${isDark ? 'text-[#8EA597]' : 'text-[#617467]'}`}>
+                Add to home screen for 1-tap full-screen access
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold py-1 px-2.5 rounded-lg bg-[#274E3C] text-white shadow-sm">
+            Install
+          </span>
+        </div>
+      )}
 
       {/* Up Next Banner */}
       {upNextEvent ? (

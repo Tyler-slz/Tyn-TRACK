@@ -1,8 +1,10 @@
-const CACHE_NAME = 'lifeflow-v1';
+const CACHE_NAME = 'lifeflow-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/favicon.ico',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -59,4 +61,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-

@@ -77,6 +77,9 @@ interface AppContextValue {
   snoozeAlarm: (minutes?: number) => void;
   testAlarm: (sound?: AlarmSoundType) => void;
   enableNotifications: () => Promise<boolean>;
+  isInstallable: boolean;
+  isStandalone: boolean;
+  promptInstallApp: () => void;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -99,6 +102,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Alarm state
   const [activeAlarm, setActiveAlarm] = useState<ActiveAlarm | null>(null);
   const [notifiedAlarms, setNotifiedAlarms] = useState<Set<string>>(new Set());
+
+  // PWA Install state
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isRunningStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true;
+      setIsStandalone(isRunningStandalone);
+
+      const handleBeforeInstall = (e: any) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+        setIsInstallable(true);
+      };
+
+      const handleAppInstalled = () => {
+        setIsStandalone(true);
+        setIsInstallable(false);
+        setDeferredPrompt(null);
+      };
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.addEventListener('appinstalled', handleAppInstalled);
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+      };
+    }
+  }, []);
+
+  const promptInstallApp = async () => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        if (choiceResult.outcome === 'accepted') {
+          setIsStandalone(true);
+        }
+        setDeferredPrompt(null);
+        setIsInstallable(false);
+      } catch (err) {
+        openModal('install-guide');
+      }
+    } else {
+      openModal('install-guide');
+    }
+  };
 
   // Load from localStorage after mount & lock in persistent storage
   useEffect(() => {
@@ -599,6 +654,9 @@ function calculateFinancials(
         snoozeAlarm,
         testAlarm,
         enableNotifications,
+        isInstallable,
+        isStandalone,
+        promptInstallApp,
       }}
     >
       {children}
