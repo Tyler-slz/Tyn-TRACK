@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import {
   Plus,
@@ -15,6 +15,11 @@ import {
   Trash2,
   PiggyBank,
   Sparkles,
+  SlidersHorizontal,
+  X,
+  AlertTriangle,
+  Check,
+  ShieldCheck,
 } from 'lucide-react';
 
 export function MoneyView() {
@@ -23,10 +28,25 @@ export function MoneyView() {
     openModal,
     currentMonthYear,
     deleteTransaction,
+    clearMoneyData,
     theme,
   } = useApp();
   const { financialSummary, transactions } = state;
   const isDark = theme === 'dark';
+
+  const [showMoneySettings, setShowMoneySettings] = useState(false);
+  const [confirmClearMoney, setConfirmClearMoney] = useState(false);
+  const [clearSuccess, setClearSuccess] = useState(false);
+
+  const handleClearMoney = () => {
+    clearMoneyData();
+    setClearSuccess(true);
+    setTimeout(() => {
+      setClearSuccess(false);
+      setConfirmClearMoney(false);
+      setShowMoneySettings(false);
+    }, 1200);
+  };
 
   const getActivityIcon = (category: string) => {
     const lower = (category || '').toLowerCase();
@@ -73,17 +93,37 @@ export function MoneyView() {
             Your money
           </h1>
         </div>
-        <button
-          onClick={() => openModal('add-money')}
-          aria-label="Add transaction"
-          className={`w-10 h-10 rounded-full border shadow-soft-sm flex items-center justify-center transition-all active:scale-95 ${
-            isDark
-              ? 'bg-[#1E2722] border-[#2A3730] text-[#7CC79E] hover:bg-[#25332B]'
-              : 'bg-white/80 border-[#E3E8E1] text-[#274E3C] hover:bg-white'
-          }`}
-        >
-          <Plus className="w-5 h-5 stroke-[2]" />
-        </button>
+        <div className="flex items-center space-x-2">
+          {/* Little settings button for Money */}
+          <button
+            onClick={() => {
+              setConfirmClearMoney(false);
+              setShowMoneySettings(true);
+            }}
+            aria-label="Money settings"
+            title="Money settings"
+            className={`w-10 h-10 rounded-full border shadow-soft-sm flex items-center justify-center transition-all active:scale-95 ${
+              isDark
+                ? 'bg-[#1E2722] border-[#2A3730] text-[#8EA397] hover:bg-[#25332B]'
+                : 'bg-white/80 border-[#E3E8E1] text-[#637367] hover:bg-white'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4 stroke-[1.8]" />
+          </button>
+
+          {/* Add transaction button */}
+          <button
+            onClick={() => openModal('add-money')}
+            aria-label="Add transaction"
+            className={`w-10 h-10 rounded-full border shadow-soft-sm flex items-center justify-center transition-all active:scale-95 ${
+              isDark
+                ? 'bg-[#1E2722] border-[#2A3730] text-[#7CC79E] hover:bg-[#25332B]'
+                : 'bg-white/80 border-[#E3E8E1] text-[#274E3C] hover:bg-white'
+            }`}
+          >
+            <Plus className="w-5 h-5 stroke-[2]" />
+          </button>
+        </div>
       </div>
 
       {/* Month & Currency header */}
@@ -368,6 +408,130 @@ export function MoneyView() {
           )}
         </div>
       </div>
+
+      {/* Subtle footer shortcut to clear money data */}
+      <div className="text-center pt-2">
+        <button
+          onClick={() => {
+            setConfirmClearMoney(false);
+            setShowMoneySettings(true);
+          }}
+          className={`text-[12px] font-medium transition-colors hover:underline ${
+            isDark ? 'text-[#75887C]' : 'text-[#829286]'
+          }`}
+        >
+          Money Settings & Reset
+        </button>
+      </div>
+
+      {/* Little Settings Modal for Money */}
+      {showMoneySettings && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div
+            className={`w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl border space-y-4 ${
+              isDark
+                ? 'bg-[#151D18] border-[#25332B] text-[#EDEFEA]'
+                : 'bg-[#FAF8F5] border-[#ECECE6] text-[#1E2621]'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-[11px] font-semibold tracking-widest uppercase ${isDark ? 'text-[#879B90]' : 'text-[#7B867E]'}`}>
+                  Preferences
+                </p>
+                <h2 className={`text-[24px] font-bold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                  Money Settings
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMoneySettings(false)}
+                className={`w-9 h-9 rounded-full border flex items-center justify-center ${
+                  isDark ? 'bg-[#202C25] border-[#2F3F36] text-[#8EA397]' : 'bg-white border-[#E3E8E1] text-[#69796D]'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Success message */}
+            {clearSuccess && (
+              <div className="bg-[#274E3C] text-white p-3.5 rounded-2xl flex items-center space-x-2 text-[13px] font-semibold animate-fade-in">
+                <Check className="w-4 h-4" />
+                <span>Money data cleared! All tasks and schedules were kept safe.</span>
+              </div>
+            )}
+
+            {/* Clear Money Data Option */}
+            <div
+              className={`rounded-2xl p-4 border space-y-3 ${
+                isDark ? 'bg-[#1C2620] border-[#2A3930]' : 'bg-white border-[#ECECE6]'
+              }`}
+            >
+              <div className="flex items-start space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-4 h-4 stroke-[2]" />
+                </div>
+                <div>
+                  <h4 className="text-[14px] font-semibold text-red-500">
+                    Clear Money Data
+                  </h4>
+                  <p className={`text-[12px] mt-0.5 leading-relaxed ${isDark ? 'text-[#8EA397]' : 'text-[#7A877E]'}`}>
+                    Wipes all income, expense, and savings transactions and resets balance to 0. <strong>Your to-dos and schedule will NOT be touched.</strong>
+                  </p>
+                </div>
+              </div>
+
+              {confirmClearMoney ? (
+                <div className={`pt-3 border-t space-y-2.5 ${isDark ? 'border-[#28372F]' : 'border-[#F0EFEB]'}`}>
+                  <div className="flex items-center space-x-1.5 text-amber-500 text-[12px] font-semibold">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Are you sure? This cannot be undone.</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearMoney(false)}
+                      className={`flex-1 py-2 rounded-xl text-[13px] font-semibold border ${
+                        isDark ? 'bg-[#222E27] border-[#2E3F35] text-[#CAD8CF]' : 'bg-white border-[#E1E5E0] text-[#55695B]'
+                      }`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearMoney}
+                      className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm active:scale-95 transition-all"
+                    >
+                      Yes, Clear Money
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearMoney(true)}
+                  className="w-full py-2.5 px-3 rounded-xl border border-red-500/30 text-red-500 hover:bg-red-500/10 text-[13px] font-semibold transition-all active:scale-95"
+                >
+                  Clear Money Data
+                </button>
+              )}
+            </div>
+
+            {/* Offline storage note */}
+            <div
+              className={`rounded-2xl p-3 border flex items-start space-x-2.5 text-[11px] ${
+                isDark ? 'bg-[#18231D] border-[#25352A] text-[#869E90]' : 'bg-[#F2F7F1] border-[#E0EBE0] text-[#586D5F]'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-[#274E3C] shrink-0 mt-0.5" />
+              <span>
+                Independent storage: clearing money data resets only the financial ledger without touching tasks or schedule events.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

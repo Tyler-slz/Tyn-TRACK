@@ -62,6 +62,7 @@ interface AppContextValue {
   prefilledTime: string;
   closeModal: () => void;
   clearAllData: () => void;
+  clearMoneyData: () => void;
   exportBackup: () => void;
   importBackup: (fileContent: string) => boolean;
   // Alarm & Reminders
@@ -497,6 +498,30 @@ function calculateFinancials(
     });
   };
 
+  const clearMoneyData = () => {
+    setState((prev) => {
+      const next: AppState = {
+        ...prev,
+        transactions: [],
+        financialSummary: {
+          totalBalance: 0,
+          monthlyIncome: 0,
+          monthlyExpenses: 0,
+          totalSavings: 0,
+          directSavings: 0,
+          monthlyExtra: 0,
+          spentToday: 0,
+          weeklyBudgetLeft: 0,
+          weeklyBudgetTotal: 0,
+          currencySymbol: prev.financialSummary?.currencySymbol || '₱',
+          currencyCode: prev.financialSummary?.currencyCode || 'PHP',
+        },
+      };
+      saveStoredAppState(next);
+      return next;
+    });
+  };
+
   const exportBackup = () => {
     exportDataToFile(state);
   };
@@ -560,6 +585,7 @@ function calculateFinancials(
         prefilledTime,
         closeModal,
         clearAllData,
+        clearMoneyData,
         exportBackup,
         importBackup,
         activeAlarm,

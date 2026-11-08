@@ -339,7 +339,7 @@ export function DashboardView() {
             </div>
             <span className={`text-[12px] font-medium ${isDark ? 'text-[#8CAD99]' : 'text-[#586A5E]'}`}>
               {state.financialSummary.currencySymbol}
-              {state.financialSummary.weeklyBudgetLeft.toFixed(2)} left this week
+              {state.financialSummary.totalSavings.toFixed(2)} in savings
             </span>
           </div>
         </div>
