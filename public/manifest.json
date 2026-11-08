@@ -1,10 +1,10 @@
 {
-  "name": "Life Flow - Daily Planner & Tracker",
-  "short_name": "Life Flow",
+  "name": "Tyn",
+  "short_name": "Tyn",
   "description": "Minimalist daily dashboard, to-dos, schedule, and money tracker.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F9F8F4",
+  "background_color": "#0D110F",
   "theme_color": "#274E3C",
   "orientation": "portrait",
   "icons": [
@@ -23,4 +23,3 @@
   ],
   "categories": ["productivity", "lifestyle", "finance"]
 }
-

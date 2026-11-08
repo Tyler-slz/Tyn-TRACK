@@ -287,7 +287,7 @@ export function ActionModals() {
                 </div>
                 <div>
                   <p className={`text-[14px] font-semibold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
-                    {isStandalone ? 'App is Installed' : 'Install Life Flow App'}
+                    {isStandalone ? 'App is Installed' : 'Install Tyn App'}
                   </p>
                   <p className={`text-[11px] ${isDark ? 'text-[#8EA397]' : 'text-[#64796B]'}`}>
                     {isStandalone
@@ -1071,7 +1071,7 @@ export function ActionModals() {
             </div>
 
             <p className={`text-[13px] leading-relaxed ${isDark ? 'text-[#A0B5A7]' : 'text-[#586A5E]'}`}>
-              Install Life Flow as a native Progressive Web App (PWA) to run in full screen without browser bars.
+              Install Tyn as a native Progressive Web App (PWA) to run in full screen without browser bars.
             </p>
 
             {/* iOS Instructions */}

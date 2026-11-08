@@ -114,7 +114,7 @@ export function DashboardView() {
               <Download className="w-3.5 h-3.5" />
             </div>
             <div>
-              <p className="text-[12px] font-semibold leading-tight">Install Life Flow</p>
+              <p className="text-[12px] font-semibold leading-tight">Install Tyn</p>
               <p className={`text-[10px] ${isDark ? 'text-[#8EA597]' : 'text-[#617467]'}`}>
                 Add to home screen for 1-tap full-screen access
               </p>

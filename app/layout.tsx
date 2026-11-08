@@ -2,25 +2,25 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Life Flow - Daily Planner & Minimalist Tracker',
+  title: 'Tyn',
   description: 'Minimalist daily dashboard, to-dos, schedule, and money tracker.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
-    title: 'Life Flow',
+    statusBarStyle: 'black-translucent',
+    title: 'Tyn',
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    icon: '/icons/icon-192.png',
-    apple: '/icons/icon-192.png',
+    icon: '/favicon.png',
+    apple: '/apple-touch-icon.png',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#274E3C',
+  themeColor: '#0D110F',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -36,13 +36,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" href="/favicon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Life Flow" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Tyn" />
       </head>
       <body>{children}</body>
     </html>
   );
 }
-
