@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lifeflow-v3';
+const CACHE_NAME = 'tyn-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -10,7 +10,9 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      return cache.addAll(STATIC_ASSETS).catch((err) => {
+        console.warn('Pre-cache complete with warnings:', err);
+      });
     })
   );
   self.skipWaiting();

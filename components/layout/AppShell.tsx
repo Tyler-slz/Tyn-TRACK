@@ -21,26 +21,17 @@ export function AppShell() {
 
   const isDark = theme === 'dark';
 
-  // Register service worker for offline PWA capabilities
+  // Register service worker for offline PWA capabilities & system notifications
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      const registerSW = () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then((reg) => {
-            console.log('Service Worker registered with scope:', reg.scope);
-          })
-          .catch((err) => {
-            console.warn('Service Worker registration failed:', err);
-          });
-      };
-
-      if (document.readyState === 'complete') {
-        registerSW();
-      } else {
-        window.addEventListener('load', registerSW);
-        return () => window.removeEventListener('load', registerSW);
-      }
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          console.log('Service Worker registered with scope:', reg.scope);
+        })
+        .catch((err) => {
+          console.warn('Service Worker registration failed:', err);
+        });
     }
   }, []);
 

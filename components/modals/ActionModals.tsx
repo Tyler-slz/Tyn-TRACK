@@ -20,7 +20,7 @@ import {
   PiggyBank
 } from 'lucide-react';
 import { Category } from '@/lib/types';
-import { AlarmSoundType } from '@/lib/alarm';
+import { AlarmSoundType, sendLocalNotification } from '@/lib/alarm';
 
 export function ActionModals() {
   const {
@@ -60,6 +60,14 @@ export function ActionModals() {
   const [tempSymbol, setTempSymbol] = useState(state.financialSummary.currencySymbol);
   const [tempCode, setTempCode] = useState(state.financialSummary.currencyCode);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [notifPermission, setNotifPermission] = useState<string>('default');
+  const [testNotifFeedback, setTestNotifFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, [activeModal]);
 
   // Task form state
   const [taskTitle, setTaskTitle] = useState('');
@@ -344,7 +352,24 @@ export function ActionModals() {
                 </label>
                 <button
                   type="button"
-                  onClick={() => testAlarm()}
+                  onClick={async () => {
+                    testAlarm();
+                    setTestNotifFeedback('Testing alarm & sending notification to phone bar...');
+                    const sent = await sendLocalNotification(
+                      'Tyn Alarm Test',
+                      'Phone vibration & status bar notification working!'
+                    );
+                    if (typeof window !== 'undefined' && 'Notification' in window) {
+                      setNotifPermission(Notification.permission);
+                      if (Notification.permission === 'denied') {
+                        setTestNotifFeedback('⚠️ Blocked in Chrome settings! Tap 🔒 in address bar → Permissions → Allow.');
+                      } else if (!sent && Notification.permission !== 'granted') {
+                        setTestNotifFeedback('Tap "Allow Phone Notifications" below to permit phone bar alerts.');
+                      } else if (sent) {
+                        setTestNotifFeedback('✓ Sent! Look at your phone notification bar.');
+                      }
+                    }
+                  }}
                   className="text-[11px] font-semibold text-[#274E3C] hover:underline flex items-center space-x-1"
                 >
                   <Volume2 className="w-3 h-3" />
@@ -356,14 +381,40 @@ export function ActionModals() {
               <button
                 type="button"
                 onClick={async () => {
+                  if (typeof window === 'undefined') return;
+                  if (!('Notification' in window)) {
+                    setTestNotifFeedback('Notifications are not supported in this browser.');
+                    return;
+                  }
+                  if (Notification.permission === 'denied') {
+                    setTestNotifFeedback(
+                      'Notifications are blocked in Chrome! Tap the 🔒 icon next to tyn-track.vercel.app in the top address bar → Site Settings → Notifications → Allow.'
+                    );
+                    return;
+                  }
+                  setTestNotifFeedback('Requesting permission from your phone...');
                   const granted = await enableNotifications();
+                  setNotifPermission(Notification.permission);
                   if (granted) {
-                    testAlarm();
+                    setTestNotifFeedback('Permission granted! Sending test notification to phone bar now...');
+                    const sent = await sendLocalNotification(
+                      'Tyn Notification Active',
+                      'Alarms will now sound & vibrate on your phone bar.'
+                    );
+                    if (sent) {
+                      setTestNotifFeedback('✓ Active! Notification sent to your phone bar.');
+                    } else {
+                      setTestNotifFeedback('Allowed! Check Android Settings → Apps → Chrome → Notifications if blocked.');
+                    }
+                  } else {
+                    setTestNotifFeedback('Permission was not granted. Please tap Allow on the phone popup.');
                   }
                 }}
                 className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all active:scale-[0.99] ${
-                  typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                  notifPermission === 'granted'
                     ? isDark ? 'bg-[#17231D] border-[#283A2E] text-[#7CC79E]' : 'bg-[#EDF5EC] border-[#DBE9DA] text-[#274E3C]'
+                    : notifPermission === 'denied'
+                    ? isDark ? 'bg-[#291717] border-[#4A2626] text-rose-400' : 'bg-[#FDF2F2] border-[#F8D7DA] text-rose-700'
                     : isDark ? 'bg-[#221B1A] border-[#382624] text-amber-400' : 'bg-[#FFF7ED] border-[#FED7AA] text-amber-700'
                 }`}
               >
@@ -371,23 +422,40 @@ export function ActionModals() {
                   <Volume2 className="w-4 h-4 shrink-0" />
                   <div>
                     <p className="text-[13px] font-semibold">
-                      {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                      {notifPermission === 'granted'
                         ? 'Phone Notifications Active'
+                        : notifPermission === 'denied'
+                        ? 'Notifications Blocked in Chrome'
                         : 'Allow Phone Notifications'}
                     </p>
-                    <p className={`text-[11px] opacity-85`}>
-                      {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
-                        ? 'Alarms will alert your whole phone even if screen is locked'
+                    <p className="text-[11px] opacity-85">
+                      {notifPermission === 'granted'
+                        ? 'Tap to send test alert to notification bar'
+                        : notifPermission === 'denied'
+                        ? 'Tap to see how to unblock in Chrome'
                         : 'Tap here to allow system alerts & vibrations'}
                     </p>
                   </div>
                 </div>
                 <span className="text-[11px] font-bold py-1 px-2.5 rounded-lg bg-black/10 dark:bg-white/10 shrink-0">
-                  {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                  {notifPermission === 'granted'
                     ? 'Active'
+                    : notifPermission === 'denied'
+                    ? 'Blocked'
                     : 'Enable'}
                 </span>
               </button>
+
+              {/* Status or troubleshooting message */}
+              {testNotifFeedback && (
+                <div className={`p-2.5 rounded-xl text-[11px] leading-relaxed border ${
+                  testNotifFeedback.includes('Blocked') || testNotifFeedback.includes('⚠️')
+                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 font-medium'
+                    : 'bg-[#274E3C]/10 border-[#274E3C]/20 text-[#274E3C] dark:text-[#7CC79E]'
+                }`}>
+                  {testNotifFeedback}
+                </div>
+              )}
 
               {/* Alarm Chime Sound Toggle */}
               <div

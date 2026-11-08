@@ -102,49 +102,67 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 // Send phone-wide native notification with sound and vibration
-export function sendLocalNotification(title: string, body: string) {
-  if (typeof window === 'undefined') return;
+export async function sendLocalNotification(title: string, body: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
 
-  if ('Notification' in window && Notification.permission === 'granted') {
-    // Try via ServiceWorkerRegistration for full Android system heads-up notification
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready
-        .then((reg) => {
-          reg.showNotification(title, {
-            body,
-            icon: '/icons/icon-192.png',
-            badge: '/icons/icon-192.png',
-            vibrate: [400, 150, 400, 150, 800],
-            tag: `tyn-alarm-${Date.now()}`,
-            renotify: true,
-            requireInteraction: true,
-          } as any);
-        })
-        .catch(() => {
-          try {
-            new Notification(title, {
-              body,
-              icon: '/icons/icon-192.png',
-              badge: '/icons/icon-192.png',
-              vibrate: [400, 150, 400, 150, 800],
-              requireInteraction: true,
-            } as any);
-          } catch (err) {
-            console.warn('Direct notification error:', err);
-          }
-        });
-    } else {
-      try {
-        new Notification(title, {
+  if (!('Notification' in window)) {
+    console.warn('Notification API not supported by this browser.');
+    return false;
+  }
+
+  // If permission not yet granted, request it
+  if (Notification.permission !== 'granted') {
+    if (Notification.permission === 'denied') {
+      console.warn('Notification permission is denied in browser settings.');
+      return false;
+    }
+    const granted = await requestNotificationPermission();
+    if (!granted) return false;
+  }
+
+  // Primary mechanism for mobile Android PWA: ServiceWorkerRegistration.showNotification
+  if ('serviceWorker' in navigator) {
+    try {
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js');
+      }
+      
+      // Wait for active service worker if ready
+      if (!reg.active) {
+        reg = await navigator.serviceWorker.ready;
+      }
+
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, {
           body,
           icon: '/icons/icon-192.png',
           badge: '/icons/icon-192.png',
           vibrate: [400, 150, 400, 150, 800],
+          tag: `tyn-alarm-${Date.now()}`,
+          renotify: true,
           requireInteraction: true,
+          silent: false,
         } as any);
-      } catch (err) {
-        console.warn('Fallback notification error:', err);
+        return true;
       }
+    } catch (swErr) {
+      console.warn('Service worker showNotification failed, trying fallback:', swErr);
     }
+  }
+
+  // Direct window Notification fallback
+  try {
+    new Notification(title, {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      vibrate: [400, 150, 400, 150, 800],
+      requireInteraction: true,
+    } as any);
+    return true;
+  } catch (directErr) {
+    console.warn('Direct notification construction failed:', directErr);
+    return false;
   }
 }
