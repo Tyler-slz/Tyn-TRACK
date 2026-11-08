@@ -14,6 +14,8 @@ export const INITIAL_APP_STATE: AppState = {
     monthlyIncome: 0,
     monthlyExpenses: 0,
     totalSavings: 0,
+    directSavings: 0,
+    monthlyExtra: 0,
     spentToday: 0,
     weeklyBudgetLeft: 0,
     weeklyBudgetTotal: 0,

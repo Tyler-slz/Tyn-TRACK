@@ -50,6 +50,8 @@ export interface FinancialSummary {
   monthlyIncome: number;
   monthlyExpenses: number;
   totalSavings: number;
+  directSavings: number;
+  monthlyExtra: number;
   spentToday: number;
   weeklyBudgetLeft: number;
   weeklyBudgetTotal: number;

@@ -76,7 +76,7 @@ export function ActionModals() {
 
   // Money form state
   const [entryType, setEntryType] = useState<'expense' | 'income' | 'savings'>('expense');
-  const [amount, setAmount] = useState('26.00');
+  const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [moneyCategory, setMoneyCategory] = useState('Food & groceries');
   const [moneyDate, setMoneyDate] = useState(todayLocalStr);
@@ -94,8 +94,17 @@ export function ActionModals() {
     if (activeModal === 'add-todo') {
       setTaskDueDate(todayLocalStr);
     }
-    if (activeModal === 'add-money') {
+    if (activeModal === 'add-money' || activeModal === 'add-savings') {
       setMoneyDate(todayLocalStr);
+      setAmount('');
+      if (activeModal === 'add-savings') {
+        setEntryType('savings');
+        setMerchant('Piggy Bank');
+        setMoneyCategory('Savings');
+      } else {
+        setMerchant('');
+        setMoneyCategory(entryType === 'income' ? 'Salary' : 'Food & groceries');
+      }
     }
   }, [activeModal, prefilledTime, todayLocalStr]);
 
@@ -156,13 +165,13 @@ export function ActionModals() {
     addTransaction({
       type: entryType,
       merchant: merchant.trim(),
-      category: entryType === 'income' ? 'Income' : entryType === 'savings' ? 'Savings' : moneyCategory,
+      category: moneyCategory.trim() || (entryType === 'income' ? 'Income' : entryType === 'savings' ? 'Savings' : 'General'),
       amount: parsedAmount,
       date: moneyDate,
       note: moneyNote.trim(),
     });
     setMerchant('');
-    setAmount('26.00');
+    setAmount('');
     setMoneyNote('');
     closeModal();
   };
@@ -798,7 +807,7 @@ export function ActionModals() {
         )}
 
         {/* Modal: Add Money Entry */}
-        {activeModal === 'add-money' && (
+        {(activeModal === 'add-money' || activeModal === 'add-savings') && (
           <form onSubmit={handleCreateTransaction} className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -806,7 +815,7 @@ export function ActionModals() {
                   Less guesswork, more clarity
                 </p>
                 <h2 className={`text-[28px] font-bold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
-                  Add money entry
+                  {entryType === 'savings' ? 'Add savings' : 'Add money entry'}
                 </h2>
               </div>
               <button
@@ -828,6 +837,7 @@ export function ActionModals() {
                   onClick={() => {
                     setEntryType('expense');
                     setMerchant('');
+                    setMoneyCategory('Food & groceries');
                   }}
                   className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-all ${
                     entryType === 'expense'
@@ -842,6 +852,7 @@ export function ActionModals() {
                   onClick={() => {
                     setEntryType('income');
                     setMerchant('');
+                    setMoneyCategory('Salary');
                   }}
                   className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-all ${
                     entryType === 'income'
@@ -855,7 +866,8 @@ export function ActionModals() {
                   type="button"
                   onClick={() => {
                     setEntryType('savings');
-                    setMerchant('Savings Vault');
+                    setMerchant('Piggy Bank');
+                    setMoneyCategory('Savings');
                   }}
                   className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-all ${
                     entryType === 'savings'
@@ -881,10 +893,12 @@ export function ActionModals() {
                 </span>
                 <input
                   type="number"
-                  step="0.01"
+                  step="any"
+                  placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="bg-transparent text-[34px] font-bold outline-none max-w-[200px] pl-1"
+                  className="bg-transparent text-[34px] font-bold outline-none max-w-[200px] pl-1 placeholder:text-[#9FB1A5] dark:placeholder:text-[#455A4C]"
+                  autoFocus
                 />
               </div>
             </div>
@@ -898,7 +912,7 @@ export function ActionModals() {
                 </span>
                 <input
                   type="text"
-                  placeholder={entryType === 'savings' ? 'e.g. Emergency Fund / Piggy Bank' : 'e.g. Fresh Market / Salary'}
+                  placeholder={entryType === 'savings' ? 'e.g. Piggy Bank / Emergency Fund' : 'e.g. Fresh Market / Salary'}
                   value={merchant}
                   onChange={(e) => setMerchant(e.target.value)}
                   required
@@ -906,28 +920,55 @@ export function ActionModals() {
                 />
               </div>
 
-              {entryType === 'expense' && (
-                <div className={`rounded-2xl p-3.5 border flex items-center justify-between ${isDark ? 'bg-[#1D2721] border-[#2A3930]' : 'bg-white border-[#ECECE6]'}`}>
-                  <div className="flex items-center space-x-2.5 flex-1">
-                    <ShoppingBag className="w-4 h-4 text-[#7A877E]" />
-                    <div className="flex-1">
-                      <span className={`text-[10px] block ${isDark ? 'text-[#8EA397]' : 'text-[#7E8A81]'}`}>Category</span>
-                      <select
-                        value={moneyCategory}
-                        onChange={(e) => setMoneyCategory(e.target.value)}
-                        className="w-full text-[14px] font-semibold bg-transparent outline-none cursor-pointer"
-                      >
-                        <option value="Food & groceries">Food & groceries</option>
-                        <option value="Food & drinks">Food & drinks</option>
-                        <option value="Shopping">Shopping</option>
-                        <option value="Transport">Transport</option>
-                        <option value="Bills">Bills</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+              {/* Category: Type custom or tap suggestion */}
+              <div className={`rounded-2xl p-3.5 border ${isDark ? 'bg-[#1D2721] border-[#2A3930]' : 'bg-white border-[#ECECE6]'}`}>
+                <div className="flex items-center space-x-2.5">
+                  <ShoppingBag className="w-4 h-4 text-[#7A877E] shrink-0" />
+                  <div className="flex-1">
+                    <span className={`text-[10px] block ${isDark ? 'text-[#8EA397]' : 'text-[#7E8A81]'}`}>
+                      Category (type your own or tap below)
+                    </span>
+                    <input
+                      type="text"
+                      placeholder={
+                        entryType === 'expense'
+                          ? 'e.g. Food & groceries, Shopping, Gym...'
+                          : entryType === 'income'
+                          ? 'e.g. Salary, Freelance, Bonus...'
+                          : 'e.g. Savings, Emergency Fund...'
+                      }
+                      value={moneyCategory}
+                      onChange={(e) => setMoneyCategory(e.target.value)}
+                      className="w-full text-[14px] font-semibold bg-transparent outline-none mt-0.5"
+                    />
                   </div>
                 </div>
-              )}
+
+                {/* Quick suggestion pills */}
+                <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-black/5 dark:border-white/5">
+                  {(entryType === 'expense'
+                    ? ['Food & groceries', 'Food & drinks', 'Shopping', 'Transport', 'Bills', 'Health', 'Personal']
+                    : entryType === 'income'
+                    ? ['Salary', 'Freelance', 'Allowance', 'Business', 'Gift']
+                    : ['Savings', 'Emergency Fund', 'Piggy Bank', 'Investment', 'Vacation']
+                  ).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setMoneyCategory(cat)}
+                      className={`text-[11px] font-medium py-1 px-2.5 rounded-lg transition-all ${
+                        moneyCategory === cat
+                          ? 'bg-[#274E3C] text-white font-semibold'
+                          : isDark
+                          ? 'bg-[#1A251F] text-[#8AA093] hover:text-white'
+                          : 'bg-[#F2F5F0] text-[#5A6D60] hover:bg-[#E5ECE3]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Native Date Picker */}
               <div className={`rounded-2xl p-3.5 border flex items-center justify-between ${isDark ? 'bg-[#1D2721] border-[#2A3930]' : 'bg-white border-[#ECECE6]'}`}>
@@ -962,7 +1003,7 @@ export function ActionModals() {
               className="w-full py-4 rounded-[24px] bg-[#274E3C] hover:bg-[#1E3F30] text-white text-[15px] font-semibold tracking-wide shadow-soft transition-all active:scale-[0.99] flex items-center justify-center space-x-2"
             >
               <Check className="w-4 h-4 stroke-[2.2]" />
-              <span>Save entry</span>
+              <span>{entryType === 'savings' ? 'Save to vault' : 'Save entry'}</span>
             </button>
           </form>
         )}

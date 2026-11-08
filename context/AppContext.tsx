@@ -102,7 +102,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Load from localStorage after mount & lock in persistent storage
   useEffect(() => {
     const loaded = loadStoredAppState();
-    setState(loaded);
+    const todayStr = getLocalDateString(new Date());
+    const refreshedFinancials = calculateFinancials(
+      loaded.transactions || [],
+      loaded.financialSummary?.currencySymbol || '₱',
+      loaded.financialSummary?.currencyCode || 'PHP',
+      todayStr
+    );
+    setState({
+      ...loaded,
+      financialSummary: refreshedFinancials,
+    });
     setIsHydrated(true);
     enablePersistentStorage();
   }, []);
@@ -318,98 +328,97 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+function calculateFinancials(
+  transactions: Transaction[],
+  symbol: string = '₱',
+  code: string = 'PHP',
+  todayStr: string = ''
+) {
+  let monthlyIncome = 0;
+  let monthlyExpenses = 0;
+  let directSavings = 0;
+  let spentToday = 0;
+
+  for (const tx of transactions) {
+    if (tx.type === 'income') {
+      monthlyIncome += tx.amount;
+    } else if (tx.type === 'expense') {
+      monthlyExpenses += tx.amount;
+      if (todayStr && tx.date === todayStr) {
+        spentToday += tx.amount;
+      }
+    } else if (tx.type === 'savings') {
+      directSavings += tx.amount;
+    }
+  }
+
+  // Core rule: all extra money (Income - Expenses) automatically counts as savings!
+  const monthlyExtra = Math.max(0, monthlyIncome - monthlyExpenses);
+  const totalSavings = monthlyExtra + directSavings;
+  const totalBalance = monthlyIncome - monthlyExpenses + directSavings;
+
+  return {
+    totalBalance,
+    monthlyIncome,
+    monthlyExpenses,
+    totalSavings,
+    directSavings,
+    monthlyExtra,
+    spentToday,
+    weeklyBudgetLeft: Math.max(0, 5000 - monthlyExpenses),
+    weeklyBudgetTotal: 5000,
+    currencySymbol: symbol || '₱',
+    currencyCode: code || 'PHP',
+  };
+}
+
   const addTransaction = (txData: Omit<Transaction, 'id'>) => {
     const newTx: Transaction = {
       ...txData,
       id: `tx-${Date.now()}`,
     };
     setState((prev) => {
-      const isExpense = txData.type === 'expense';
-      const isIncome = txData.type === 'income';
-      const isSavings = txData.type === 'savings';
-
-      let updatedBalance = prev.financialSummary.totalBalance;
-      let updatedExpenses = prev.financialSummary.monthlyExpenses;
-      let updatedIncome = prev.financialSummary.monthlyIncome;
-      let updatedSpentToday = prev.financialSummary.spentToday;
-      let updatedSavings = prev.financialSummary.totalSavings || 0;
-      let updatedWeeklyBudget = prev.financialSummary.weeklyBudgetLeft;
-
-      if (isExpense) {
-        updatedBalance -= txData.amount;
-        updatedExpenses += txData.amount;
-        updatedSpentToday += txData.amount;
-        updatedWeeklyBudget = Math.max(0, updatedWeeklyBudget - txData.amount);
-      } else if (isIncome) {
-        updatedBalance += txData.amount;
-        updatedIncome += txData.amount;
-      } else if (isSavings) {
-        updatedSavings += txData.amount;
-        // Savings can be allocated from liquid balance or deposited directly
-        updatedBalance = Math.max(0, updatedBalance - txData.amount);
-      }
+      const nextTransactions = [newTx, ...prev.transactions];
+      const nextFinancials = calculateFinancials(
+        nextTransactions,
+        prev.financialSummary.currencySymbol,
+        prev.financialSummary.currencyCode,
+        todayLocalStr
+      );
 
       return {
         ...prev,
-        transactions: [newTx, ...prev.transactions],
-        financialSummary: {
-          ...prev.financialSummary,
-          totalBalance: updatedBalance,
-          monthlyIncome: updatedIncome,
-          monthlyExpenses: updatedExpenses,
-          totalSavings: updatedSavings,
-          spentToday: updatedSpentToday,
-          weeklyBudgetLeft: updatedWeeklyBudget,
-        },
+        transactions: nextTransactions,
+        financialSummary: nextFinancials,
       };
     });
   };
 
   const deleteTransaction = (id: string) => {
     setState((prev) => {
-      const target = prev.transactions.find((t) => t.id === id);
-      if (!target) return prev;
-      const isExpense = target.type === 'expense';
-      const isIncome = target.type === 'income';
-      const isSavings = target.type === 'savings';
-
-      let updatedBalance = prev.financialSummary.totalBalance;
-      let updatedExpenses = prev.financialSummary.monthlyExpenses;
-      let updatedIncome = prev.financialSummary.monthlyIncome;
-      let updatedSavings = prev.financialSummary.totalSavings || 0;
-
-      if (isExpense) {
-        updatedBalance += target.amount;
-        updatedExpenses = Math.max(0, updatedExpenses - target.amount);
-      } else if (isIncome) {
-        updatedBalance = Math.max(0, updatedBalance - target.amount);
-        updatedIncome = Math.max(0, updatedIncome - target.amount);
-      } else if (isSavings) {
-        updatedSavings = Math.max(0, updatedSavings - target.amount);
-        updatedBalance += target.amount;
-      }
+      const nextTransactions = prev.transactions.filter((t) => t.id !== id);
+      const nextFinancials = calculateFinancials(
+        nextTransactions,
+        prev.financialSummary.currencySymbol,
+        prev.financialSummary.currencyCode,
+        todayLocalStr
+      );
 
       return {
         ...prev,
-        transactions: prev.transactions.filter((t) => t.id !== id),
-        financialSummary: {
-          ...prev.financialSummary,
-          totalBalance: updatedBalance,
-          monthlyExpenses: updatedExpenses,
-          monthlyIncome: updatedIncome,
-          totalSavings: updatedSavings,
-        },
+        transactions: nextTransactions,
+        financialSummary: nextFinancials,
       };
     });
   };
 
-  // Direct deposit or surplus transfer into Savings
+  // Direct deposit into Savings
   const depositToSavings = (amount: number, note: string = 'Added to Savings') => {
     if (amount <= 0) return;
     const todayStr = getLocalDateString(new Date());
     addTransaction({
       type: 'savings',
-      merchant: 'Savings Vault',
+      merchant: note || 'Savings Vault',
       category: 'Savings',
       amount,
       date: todayStr,
@@ -418,13 +427,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const transferSurplusToSavings = (customAmount?: number) => {
-    const surplus = Math.max(
-      0,
-      state.financialSummary.monthlyIncome - state.financialSummary.monthlyExpenses
-    );
-    const amountToTransfer = customAmount !== undefined ? customAmount : surplus;
-    if (amountToTransfer <= 0) return;
-    depositToSavings(amountToTransfer, 'Extra money surplus saved');
+    // Leftover money is already automatically counted in savings
+    if (customAmount && customAmount > 0) {
+      depositToSavings(customAmount, 'Dedicated Savings');
+    }
   };
 
   // Daily Micro-Journal
@@ -475,6 +481,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       alarmSoundEnabled: state.alarmSoundEnabled !== undefined ? state.alarmSoundEnabled : true,
       alarmVibrationEnabled: state.alarmVibrationEnabled !== undefined ? state.alarmVibrationEnabled : true,
       dailyNotes: [],
+      financialSummary: {
+        totalBalance: 0,
+        monthlyIncome: 0,
+        monthlyExpenses: 0,
+        totalSavings: 0,
+        directSavings: 0,
+        monthlyExtra: 0,
+        spentToday: 0,
+        weeklyBudgetLeft: 0,
+        weeklyBudgetTotal: 0,
+        currencySymbol: state.financialSummary?.currencySymbol || '₱',
+        currencyCode: state.financialSummary?.currencyCode || 'PHP',
+      },
     });
   };
 
