@@ -15,7 +15,9 @@ import {
   Volume2,
   Music,
   Moon,
-  Sun
+  Sun,
+  Smartphone,
+  PiggyBank
 } from 'lucide-react';
 import { Category } from '@/lib/types';
 import { AlarmSoundType } from '@/lib/alarm';
@@ -36,6 +38,10 @@ export function ActionModals() {
     testAlarm,
     alarmSound,
     setAlarmSound,
+    alarmSoundEnabled,
+    toggleAlarmSound,
+    alarmVibrationEnabled,
+    toggleAlarmVibration,
     theme,
     toggleTheme,
     todayLocalStr,
@@ -69,7 +75,7 @@ export function ActionModals() {
   const [eventNotes, setEventNotes] = useState('');
 
   // Money form state
-  const [entryType, setEntryType] = useState<'expense' | 'income'>('expense');
+  const [entryType, setEntryType] = useState<'expense' | 'income' | 'savings'>('expense');
   const [amount, setAmount] = useState('26.00');
   const [merchant, setMerchant] = useState('');
   const [moneyCategory, setMoneyCategory] = useState('Food & groceries');
@@ -150,7 +156,7 @@ export function ActionModals() {
     addTransaction({
       type: entryType,
       merchant: merchant.trim(),
-      category: entryType === 'income' ? 'Income' : moneyCategory,
+      category: entryType === 'income' ? 'Income' : entryType === 'savings' ? 'Savings' : moneyCategory,
       amount: parsedAmount,
       date: moneyDate,
       note: moneyNote.trim(),
@@ -270,7 +276,7 @@ export function ActionModals() {
               </div>
             </div>
 
-            {/* Alarm Sound Picker */}
+            {/* Reminder Alarms, Chime & Vibration Controls */}
             <div
               className={`rounded-2xl p-4 border space-y-3 ${
                 isDark ? 'bg-[#1D2721] border-[#2A3930]' : 'bg-white border-[#ECECE6]'
@@ -279,7 +285,7 @@ export function ActionModals() {
               <div className="flex items-center justify-between">
                 <label className="text-[12px] font-semibold flex items-center space-x-1.5">
                   <Music className="w-3.5 h-3.5 text-[#274E3C]" />
-                  <span>Reminder Alarm Sound</span>
+                  <span>Reminder Alarms & Feedback</span>
                 </label>
                 <button
                   type="button"
@@ -287,35 +293,107 @@ export function ActionModals() {
                   className="text-[11px] font-semibold text-[#274E3C] hover:underline flex items-center space-x-1"
                 >
                   <Volume2 className="w-3 h-3" />
-                  <span>Preview</span>
+                  <span>Test Alarm</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'zen', label: 'Zen Bell' },
-                  { id: 'marimba', label: 'Marimba' },
-                  { id: 'pulse', label: 'Pulse' },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      setAlarmSound(s.id as AlarmSoundType);
-                      testAlarm(s.id as AlarmSoundType);
-                    }}
-                    className={`py-2 px-2 rounded-xl text-[12px] font-medium transition-all ${
-                      alarmSound === s.id
-                        ? 'bg-[#274E3C] text-white font-semibold shadow-sm'
-                        : isDark
-                        ? 'bg-[#161E19] text-[#8AA093] border border-[#2B3B32]'
-                        : 'bg-[#FAFBF9] text-[#6E7D72] border border-[#ECECE6]'
+              {/* Alarm Chime Sound Toggle */}
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                  isDark ? 'bg-[#161F1A] border-[#26372D]' : 'bg-[#FAFBF9] border-[#EDF1EB]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Volume2 className={`w-4 h-4 ${alarmSoundEnabled ? 'text-[#274E3C]' : 'text-gray-400'}`} />
+                  <div>
+                    <p className={`text-[13px] font-semibold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                      Alarm Chime Sound
+                    </p>
+                    <p className={`text-[11px] ${isDark ? 'text-[#8EA397]' : 'text-[#7A877E]'}`}>
+                      {alarmSoundEnabled ? 'Plays melodic chime' : 'Muted (Silent)'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleAlarmSound}
+                  className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center ${
+                    alarmSoundEnabled ? 'bg-[#274E3C]' : 'bg-[#CBD6CC]'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                      alarmSoundEnabled ? 'translate-x-5' : 'translate-x-0'
                     }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+                  />
+                </button>
               </div>
+
+              {/* Device Vibration Toggle */}
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                  isDark ? 'bg-[#161F1A] border-[#26372D]' : 'bg-[#FAFBF9] border-[#EDF1EB]'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Smartphone className={`w-4 h-4 ${alarmVibrationEnabled ? 'text-[#274E3C]' : 'text-gray-400'}`} />
+                  <div>
+                    <p className={`text-[13px] font-semibold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                      Device Vibration
+                    </p>
+                    <p className={`text-[11px] ${isDark ? 'text-[#8EA397]' : 'text-[#7A877E]'}`}>
+                      {alarmVibrationEnabled ? 'Vibrates phone on alarm' : 'Vibration disabled'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleAlarmVibration}
+                  className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center ${
+                    alarmVibrationEnabled ? 'bg-[#274E3C]' : 'bg-[#CBD6CC]'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                      alarmVibrationEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Melody selection when chime is enabled */}
+              {alarmSoundEnabled && (
+                <div className="pt-1 space-y-1.5">
+                  <span className={`text-[11px] block font-medium ${isDark ? 'text-[#8EA397]' : 'text-[#7A877E]'}`}>
+                    Choose Melody
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'zen', label: 'Zen Bell' },
+                      { id: 'marimba', label: 'Marimba' },
+                      { id: 'pulse', label: 'Pulse' },
+                    ].map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setAlarmSound(s.id as AlarmSoundType);
+                          testAlarm(s.id as AlarmSoundType);
+                        }}
+                        className={`py-2 px-2 rounded-xl text-[12px] font-medium transition-all ${
+                          alarmSound === s.id
+                            ? 'bg-[#274E3C] text-white font-semibold shadow-sm'
+                            : isDark
+                            ? 'bg-[#161E19] text-[#8AA093] border border-[#2B3B32]'
+                            : 'bg-[#FAFBF9] text-[#6E7D72] border border-[#ECECE6]'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Profile Fields */}
@@ -747,7 +825,10 @@ export function ActionModals() {
               <div className={`p-1 rounded-full flex items-center ${isDark ? 'bg-[#1E2822]' : 'bg-[#EAEFE8]'}`}>
                 <button
                   type="button"
-                  onClick={() => setEntryType('expense')}
+                  onClick={() => {
+                    setEntryType('expense');
+                    setMerchant('');
+                  }}
                   className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-all ${
                     entryType === 'expense'
                       ? 'bg-[#274E3C] text-white shadow-sm'
@@ -758,7 +839,10 @@ export function ActionModals() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEntryType('income')}
+                  onClick={() => {
+                    setEntryType('income');
+                    setMerchant('');
+                  }}
                   className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-all ${
                     entryType === 'income'
                       ? 'bg-[#274E3C] text-white shadow-sm'
@@ -767,12 +851,28 @@ export function ActionModals() {
                 >
                   Income
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEntryType('savings');
+                    setMerchant('Savings Vault');
+                  }}
+                  className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-all ${
+                    entryType === 'savings'
+                      ? 'bg-[#274E3C] text-white shadow-sm'
+                      : isDark ? 'text-[#8EA397]' : 'text-[#6F7E73]'
+                  }`}
+                >
+                  Savings
+                </button>
               </div>
             </div>
 
             <div className={`rounded-[24px] p-5 border ${isDark ? 'bg-[#18231D] border-[#25362C]' : 'bg-[#EAF0E8] border-[#DEE8DD]'}`}>
               <div className="flex items-center justify-between">
-                <span className={`text-[11px] font-medium ${isDark ? 'text-[#8CAD99]' : 'text-[#657569]'}`}>Amount</span>
+                <span className={`text-[11px] font-medium ${isDark ? 'text-[#8CAD99]' : 'text-[#657569]'}`}>
+                  {entryType === 'savings' ? 'Amount to Save' : 'Amount'}
+                </span>
                 <span className={`text-[11px] font-semibold ${isDark ? 'text-[#8CAD99]' : 'text-[#657569]'}`}>{state.financialSummary.currencyCode}</span>
               </div>
               <div className="flex items-center mt-1">
@@ -793,10 +893,12 @@ export function ActionModals() {
               <label className="text-[13px] font-semibold">The details</label>
 
               <div className={`rounded-2xl p-3.5 border ${isDark ? 'bg-[#1D2721] border-[#2A3930]' : 'bg-white border-[#ECECE6]'}`}>
-                <span className={`text-[10px] block ${isDark ? 'text-[#8EA397]' : 'text-[#7E8A81]'}`}>Merchant / Title</span>
+                <span className={`text-[10px] block ${isDark ? 'text-[#8EA397]' : 'text-[#7E8A81]'}`}>
+                  {entryType === 'savings' ? 'Deposit Purpose / Title' : 'Merchant / Title'}
+                </span>
                 <input
                   type="text"
-                  placeholder="e.g. Fresh Market / Salary"
+                  placeholder={entryType === 'savings' ? 'e.g. Emergency Fund / Piggy Bank' : 'e.g. Fresh Market / Salary'}
                   value={merchant}
                   onChange={(e) => setMerchant(e.target.value)}
                   required

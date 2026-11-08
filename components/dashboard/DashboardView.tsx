@@ -17,7 +17,6 @@ import {
   Briefcase,
   User,
   Plus,
-  Flame,
   PenLine
 } from 'lucide-react';
 
@@ -30,13 +29,12 @@ export function DashboardView() {
     currentDateHeader,
     theme,
     toggleTheme,
-    toggleHabit,
     saveDailyNote,
-    nowDate,
+    todayLocalStr,
   } = useApp();
 
   const isDark = theme === 'dark';
-  const todayStr = nowDate.toISOString().split('T')[0];
+  const todayStr = todayLocalStr;
 
   const upNextEvent = state.events.find((e) => e.isUpNext) || state.events[0];
   const restOfDayEvents = state.events.filter((e) => !e.isUpNext).slice(0, 2);
@@ -142,50 +140,6 @@ export function DashboardView() {
           </div>
           <div className="w-10 h-10 rounded-2xl bg-[#274E3C] text-white flex items-center justify-center">
             <Plus className="w-5 h-5 stroke-[2]" />
-          </div>
-        </div>
-      )}
-
-      {/* Feature 1: Daily Habits & Routines */}
-      {state.habits && state.habits.length > 0 && (
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between px-0.5">
-            <h3 className={`text-[15px] font-semibold tracking-tight ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
-              Daily Habits
-            </h3>
-            <span className={`text-[11px] font-medium ${isDark ? 'text-[#879B90]' : 'text-[#7B867E]'}`}>
-              Tap to complete
-            </span>
-          </div>
-
-          <div className="flex space-x-2.5 overflow-x-auto pb-1 no-scrollbar">
-            {state.habits.map((habit) => {
-              const isDone = habit.lastCompletedDate === todayStr;
-              return (
-                <button
-                  key={habit.id}
-                  onClick={() => toggleHabit(habit.id)}
-                  className={`flex items-center space-x-2 py-2 px-3.5 rounded-2xl border transition-all shrink-0 active:scale-95 ${
-                    isDone
-                      ? 'bg-[#274E3C] text-white border-[#274E3C] shadow-sm'
-                      : isDark
-                      ? 'bg-[#1B221E] border-[#26312A] text-[#8AA093]'
-                      : 'bg-white border-[#ECECE6] text-[#55695B]'
-                  }`}
-                >
-                  <span className="text-[16px]">{habit.emoji}</span>
-                  <span className={`text-[13px] font-medium ${isDone ? 'text-white' : ''}`}>
-                    {habit.title}
-                  </span>
-                  {habit.streak > 0 && (
-                    <span className={`text-[11px] flex items-center space-x-0.5 font-bold ${isDone ? 'text-[#BFD6C7]' : 'text-amber-500'}`}>
-                      <Flame className="w-3 h-3 fill-current" />
-                      <span>{habit.streak}</span>
-                    </span>
-                  )}
-                </button>
-              );
-            })}
           </div>
         </div>
       )}

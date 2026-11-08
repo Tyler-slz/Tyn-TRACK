@@ -32,20 +32,12 @@ export interface CalendarEvent {
 
 export interface Transaction {
   id: string;
-  type: 'expense' | 'income';
+  type: 'expense' | 'income' | 'savings';
   merchant: string;
   category: string;
   amount: number;
   date: string; // "YYYY-MM-DD"
   note?: string;
-}
-
-export interface Habit {
-  id: string;
-  title: string;
-  emoji: string;
-  streak: number;
-  lastCompletedDate?: string; // "YYYY-MM-DD"
 }
 
 export interface DailyNote {
@@ -57,10 +49,10 @@ export interface FinancialSummary {
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpenses: number;
+  totalSavings: number;
   spentToday: number;
   weeklyBudgetLeft: number;
   weeklyBudgetTotal: number;
-  monthlyBudgetLimit: number;
   currencySymbol: string;
   currencyCode: string;
 }
@@ -68,10 +60,11 @@ export interface FinancialSummary {
 export interface AppState {
   userName: string;
   theme: 'light' | 'dark';
+  alarmSoundEnabled: boolean;
+  alarmVibrationEnabled: boolean;
   tasks: Task[];
   events: CalendarEvent[];
   transactions: Transaction[];
-  habits: Habit[];
   dailyNotes: DailyNote[];
   financialSummary: FinancialSummary;
 }

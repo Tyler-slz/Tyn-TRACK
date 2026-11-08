@@ -13,22 +13,33 @@ import {
   CreditCard,
   Wallet,
   Trash2,
-  SlidersHorizontal,
-  Check
+  Check,
+  PiggyBank,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 
 export function MoneyView() {
-  const { state, openModal, currentMonthYear, deleteTransaction, updateMonthlyBudget, theme } = useApp();
+  const {
+    state,
+    openModal,
+    currentMonthYear,
+    deleteTransaction,
+    depositToSavings,
+    transferSurplusToSavings,
+    theme,
+  } = useApp();
   const { financialSummary, transactions } = state;
   const isDark = theme === 'dark';
 
-  const [isEditingBudget, setIsEditingBudget] = useState(false);
-  const [budgetInput, setBudgetInput] = useState(
-    (financialSummary.monthlyBudgetLimit || 10000).toString()
-  );
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositSuccessMsg, setDepositSuccessMsg] = useState<string | null>(null);
 
   const getActivityIcon = (category: string) => {
     switch (category) {
+      case 'Savings':
+        return <PiggyBank className="w-4 h-4 stroke-[1.8] text-[#274E3C]" />;
       case 'Food & groceries':
         return <ShoppingBag className="w-4 h-4 stroke-[1.8] text-[#274E3C]" />;
       case 'Food & drinks':
@@ -58,16 +69,33 @@ export function MoneyView() {
 
   const totalExpenseAmount = expenses.reduce((acc, t) => acc + t.amount, 0);
 
-  // Suggestion 3: Budget Limit & Progress Ring Calculations
-  const budgetLimit = financialSummary.monthlyBudgetLimit || 10000;
-  const budgetSpentPercent = Math.min(100, Math.round((totalExpenseAmount / budgetLimit) * 100));
-  const budgetRemaining = Math.max(0, budgetLimit - totalExpenseAmount);
-  const isNearLimit = budgetSpentPercent >= 85;
+  // Extra money calculation: income leftover after expenses
+  const extraMoneyThisMonth = Math.max(
+    0,
+    financialSummary.monthlyIncome - financialSummary.monthlyExpenses
+  );
+  const totalSavings = financialSummary.totalSavings || 0;
 
-  const handleSaveBudget = () => {
-    const parsed = parseFloat(budgetInput) || 10000;
-    updateMonthlyBudget(parsed);
-    setIsEditingBudget(false);
+  const handleDepositSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(depositAmount);
+    if (!val || val <= 0) return;
+    depositToSavings(val, 'Direct deposit into savings');
+    setDepositAmount('');
+    setIsDepositing(false);
+    setDepositSuccessMsg(`Saved ${financialSummary.currencySymbol}${val.toFixed(2)} to savings!`);
+    setTimeout(() => setDepositSuccessMsg(null), 3000);
+  };
+
+  const handleQuickTransferSurplus = () => {
+    if (extraMoneyThisMonth <= 0) return;
+    transferSurplusToSavings(extraMoneyThisMonth);
+    setDepositSuccessMsg(
+      `Transferred all extra money (${financialSummary.currencySymbol}${extraMoneyThisMonth.toFixed(
+        2
+      )}) to savings!`
+    );
+    setTimeout(() => setDepositSuccessMsg(null), 3000);
   };
 
   return (
@@ -155,70 +183,122 @@ export function MoneyView() {
         </div>
       </div>
 
-      {/* Suggestion 3: Monthly Budget Limit & Visual Gauge Card */}
+      {/* Savings & Extra Money Card (Replaces Monthly Budget Goal) */}
       <div
-        className={`rounded-[26px] p-4.5 border shadow-soft-sm space-y-3 ${
-          isDark ? 'bg-[#18211D] border-[#243028]' : 'bg-white border-[#ECECE6]'
+        className={`rounded-[26px] p-5 border shadow-soft space-y-4 transition-all ${
+          isDark
+            ? 'bg-[#18231C] border-[#25362B]'
+            : 'bg-[#EFF5EE] border-[#DEE8DD]'
         }`}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <SlidersHorizontal className={`w-4 h-4 ${isDark ? 'text-[#7CC79E]' : 'text-[#274E3C]'}`} />
-            <h3 className={`text-[15px] font-semibold ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
-              Monthly Budget Goal
-            </h3>
+          <div className="flex items-center space-x-2.5">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              isDark ? 'bg-[#223327] text-[#7CC79E]' : 'bg-[#DDE9DC] text-[#274E3C]'
+            }`}>
+              <PiggyBank className="w-4 h-4 stroke-[2]" />
+            </div>
+            <div>
+              <h3 className={`text-[15px] font-semibold leading-tight ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                Savings Vault
+              </h3>
+              <p className={`text-[11px] ${isDark ? 'text-[#879B90]' : 'text-[#708074]'}`}>
+                Your protected nest egg
+              </p>
+            </div>
           </div>
+
           <button
-            onClick={() => setIsEditingBudget(!isEditingBudget)}
-            className="text-[11px] font-semibold text-[#274E3C] hover:underline"
+            onClick={() => setIsDepositing(!isDepositing)}
+            className="text-[11px] font-semibold text-[#274E3C] hover:underline flex items-center space-x-1"
           >
-            {isEditingBudget ? 'Cancel' : 'Set Limit'}
+            <span>{isDepositing ? 'Cancel' : '+ Deposit'}</span>
           </button>
         </div>
 
-        {isEditingBudget ? (
-          <div className="flex items-center space-x-2 pt-1">
-            <span className="text-[14px] font-bold">{financialSummary.currencySymbol}</span>
-            <input
-              type="number"
-              value={budgetInput}
-              onChange={(e) => setBudgetInput(e.target.value)}
-              className={`flex-1 p-2 rounded-xl border text-[14px] font-semibold outline-none ${
-                isDark ? 'bg-[#1F2B24] border-[#2E3F33] text-white' : 'bg-[#FAFBF9] border-[#DCE4D9]'
-              }`}
-            />
-            <button
-              onClick={handleSaveBudget}
-              className="py-2 px-3 rounded-xl bg-[#274E3C] text-white font-semibold text-[12px] flex items-center space-x-1 shadow-sm"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>Save</span>
-            </button>
+        {/* Savings Balance Display */}
+        <div className="flex items-baseline justify-between pt-0.5">
+          <div>
+            <span className={`text-[11px] font-medium block uppercase tracking-wider ${isDark ? 'text-[#8AA093]' : 'text-[#6C7E72]'}`}>
+              Total Saved
+            </span>
+            <p className={`text-[28px] font-bold tracking-tight leading-none mt-1 ${isDark ? 'text-[#7CC79E]' : 'text-[#274E3C]'}`}>
+              {financialSummary.currencySymbol}
+              {totalSavings.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[13px]">
-              <span className={`font-medium ${isDark ? 'text-[#879B90]' : 'text-[#6C7C70]'}`}>
-                {budgetSpentPercent}% used of {financialSummary.currencySymbol}{budgetLimit.toLocaleString()}
-              </span>
-              <span
-                className={`font-semibold ${
-                  isNearLimit ? 'text-amber-500 font-bold' : isDark ? 'text-[#7CC79E]' : 'text-[#274E3C]'
-                }`}
-              >
-                {financialSummary.currencySymbol}{budgetRemaining.toLocaleString()} left
-              </span>
-            </div>
 
-            {/* Visual Gauge Bar */}
-            <div className={`w-full h-2.5 rounded-full overflow-hidden ${isDark ? 'bg-[#25322B]' : 'bg-[#EAEFE8]'}`}>
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  isNearLimit ? 'bg-amber-500' : 'bg-[#274E3C]'
+          <div className="text-right">
+            <span className={`text-[11px] font-medium block uppercase tracking-wider ${isDark ? 'text-[#8AA093]' : 'text-[#6C7E72]'}`}>
+              Extra Money Left
+            </span>
+            <p className={`text-[18px] font-bold tracking-tight mt-1 ${
+              extraMoneyThisMonth > 0
+                ? isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'
+                : isDark ? 'text-[#6F8176]' : 'text-[#8A958D]'
+            }`}>
+              {financialSummary.currencySymbol}
+              {extraMoneyThisMonth.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+        </div>
+
+        {/* Success toast if any */}
+        {depositSuccessMsg && (
+          <div className="bg-[#274E3C] text-white text-[12px] font-medium py-2 px-3 rounded-xl flex items-center space-x-2 animate-fade-in">
+            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>{depositSuccessMsg}</span>
+          </div>
+        )}
+
+        {/* Deposit Input Box */}
+        {isDepositing && (
+          <form onSubmit={handleDepositSubmit} className="pt-2 border-t border-black/5 dark:border-white/5 space-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-[14px] font-bold text-[#274E3C]">{financialSummary.currencySymbol}</span>
+              <input
+                type="number"
+                step="any"
+                placeholder="Amount to save"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                autoFocus
+                className={`flex-1 p-2 rounded-xl border text-[14px] font-semibold outline-none ${
+                  isDark ? 'bg-[#1E2B23] border-[#2E4134] text-white' : 'bg-white border-[#D6E2D4] text-[#1E2621]'
                 }`}
-                style={{ width: `${budgetSpentPercent}%` }}
               />
+              <button
+                type="submit"
+                className="py-2 px-3.5 rounded-xl bg-[#274E3C] text-white font-semibold text-[12px] flex items-center space-x-1 shadow-sm active:scale-95"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Save</span>
+              </button>
             </div>
+          </form>
+        )}
+
+        {/* Extra Money Auto-Allocation Button */}
+        {extraMoneyThisMonth > 0 && !isDepositing && (
+          <div className={`pt-2.5 border-t flex items-center justify-between ${isDark ? 'border-[#223327]' : 'border-[#D9E5D7]'}`}>
+            <div className="flex items-center space-x-1.5 text-[12px]">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span className={`font-medium ${isDark ? 'text-[#CAD8CF]' : 'text-[#485C4E]'}`}>
+                You have {financialSummary.currencySymbol}{extraMoneyThisMonth.toFixed(2)} extra surplus
+              </span>
+            </div>
+            <button
+              onClick={handleQuickTransferSurplus}
+              className="text-[11px] font-semibold text-white bg-[#274E3C] hover:bg-[#1E3E30] py-1 px-2.5 rounded-lg shadow-sm flex items-center space-x-1 active:scale-95 transition-all"
+            >
+              <span>Move to Savings</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
         )}
       </div>
@@ -354,10 +434,16 @@ export function MoneyView() {
                 <div className="flex items-center space-x-2">
                   <span
                     className={`text-[15px] font-semibold ${
-                      tx.type === 'income' ? 'text-[#2E7A4A]' : isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'
+                      tx.type === 'income'
+                        ? 'text-[#2E7A4A]'
+                        : tx.type === 'savings'
+                        ? 'text-[#274E3C] font-bold'
+                        : isDark
+                        ? 'text-[#EDEFEA]'
+                        : 'text-[#1E2621]'
                     }`}
                   >
-                    {tx.type === 'income' ? '+' : '-'}
+                    {tx.type === 'income' ? '+' : tx.type === 'savings' ? '🏦 ' : '-'}
                     {financialSummary.currencySymbol}
                     {tx.amount.toFixed(2)}
                   </span>

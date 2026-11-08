@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AppState, CalendarEvent, TabType, Task, Transaction, Habit, DailyNote } from '@/lib/types';
+import { AppState, CalendarEvent, TabType, Task, Transaction, DailyNote } from '@/lib/types';
 import {
   INITIAL_APP_STATE,
   loadStoredAppState,
@@ -51,11 +51,9 @@ interface AppContextValue {
   deleteEvent: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   deleteTransaction: (id: string) => void;
-  toggleHabit: (id: string) => void;
-  addHabit: (title: string, emoji: string) => void;
-  deleteHabit: (id: string) => void;
+  depositToSavings: (amount: number, note?: string) => void;
+  transferSurplusToSavings: (customAmount?: number) => void;
   saveDailyNote: (text: string) => void;
-  updateMonthlyBudget: (limit: number) => void;
   updateUserName: (name: string) => void;
   updateCurrency: (symbol: string, code: string) => void;
   activeModal: string | null;
@@ -70,6 +68,10 @@ interface AppContextValue {
   activeAlarm: ActiveAlarm | null;
   alarmSound: AlarmSoundType;
   setAlarmSound: (sound: AlarmSoundType) => void;
+  alarmSoundEnabled: boolean;
+  toggleAlarmSound: () => void;
+  alarmVibrationEnabled: boolean;
+  toggleAlarmVibration: () => void;
   dismissAlarm: () => void;
   snoozeAlarm: (minutes?: number) => void;
   testAlarm: (sound?: AlarmSoundType) => void;
@@ -141,7 +143,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Check tasks
       state.tasks.forEach((task) => {
         if (task.completed || !task.remindMe) return;
-        // Alarm only for tasks due today or without due date
         if (task.dueDate && task.dueDate !== todayStr) return;
 
         const parsed = parseTimeString(task.dueTime);
@@ -188,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const alarmInterval = setInterval(checkAlarms, 10000);
     return () => clearInterval(alarmInterval);
-  }, [isHydrated, state.tasks, state.events, notifiedAlarms, alarmSound]);
+  }, [isHydrated, state.tasks, state.events, notifiedAlarms, state.alarmSoundEnabled, state.alarmVibrationEnabled, alarmSound]);
 
   const toggleTheme = () => {
     setState((prev) => ({
@@ -197,10 +198,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const toggleAlarmSound = () => {
+    setState((prev) => ({
+      ...prev,
+      alarmSoundEnabled: !prev.alarmSoundEnabled,
+    }));
+  };
+
+  const toggleAlarmVibration = () => {
+    setState((prev) => ({
+      ...prev,
+      alarmVibrationEnabled: !prev.alarmVibrationEnabled,
+    }));
+  };
+
   const triggerAlarm = (alarm: ActiveAlarm) => {
     setActiveAlarm(alarm);
-    playChimeSound(alarmSound);
-    triggerVibration();
+
+    if (state.alarmSoundEnabled !== false) {
+      playChimeSound(alarmSound);
+    }
+    if (state.alarmVibrationEnabled !== false) {
+      triggerVibration();
+    }
     sendLocalNotification(
       `Reminder: ${alarm.title}`,
       `Scheduled for ${alarm.time}${alarm.category ? ` · ${alarm.category}` : ''}`
@@ -223,8 +243,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const testAlarm = (soundOverride?: AlarmSoundType) => {
     const selectedSound = soundOverride || alarmSound;
-    playChimeSound(selectedSound);
-    triggerAlarm({
+    if (state.alarmSoundEnabled !== false) {
+      playChimeSound(selectedSound);
+    }
+    if (state.alarmVibrationEnabled !== false) {
+      triggerVibration();
+    }
+    setActiveAlarm({
       id: 'test-alarm',
       title: 'Reminder preview',
       time: getCurrentTimeFormatted(new Date()),
@@ -300,11 +325,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     setState((prev) => {
       const isExpense = txData.type === 'expense';
-      const updatedSpentToday = isExpense ? prev.financialSummary.spentToday + txData.amount : prev.financialSummary.spentToday;
-      const updatedExpenses = isExpense ? prev.financialSummary.monthlyExpenses + txData.amount : prev.financialSummary.monthlyExpenses;
-      const updatedIncome = !isExpense ? prev.financialSummary.monthlyIncome + txData.amount : prev.financialSummary.monthlyIncome;
-      const updatedBalance = isExpense ? prev.financialSummary.totalBalance - txData.amount : prev.financialSummary.totalBalance + txData.amount;
-      const updatedWeeklyBudget = isExpense ? Math.max(0, prev.financialSummary.weeklyBudgetLeft - txData.amount) : prev.financialSummary.weeklyBudgetLeft;
+      const isIncome = txData.type === 'income';
+      const isSavings = txData.type === 'savings';
+
+      let updatedBalance = prev.financialSummary.totalBalance;
+      let updatedExpenses = prev.financialSummary.monthlyExpenses;
+      let updatedIncome = prev.financialSummary.monthlyIncome;
+      let updatedSpentToday = prev.financialSummary.spentToday;
+      let updatedSavings = prev.financialSummary.totalSavings || 0;
+      let updatedWeeklyBudget = prev.financialSummary.weeklyBudgetLeft;
+
+      if (isExpense) {
+        updatedBalance -= txData.amount;
+        updatedExpenses += txData.amount;
+        updatedSpentToday += txData.amount;
+        updatedWeeklyBudget = Math.max(0, updatedWeeklyBudget - txData.amount);
+      } else if (isIncome) {
+        updatedBalance += txData.amount;
+        updatedIncome += txData.amount;
+      } else if (isSavings) {
+        updatedSavings += txData.amount;
+        // Savings can be allocated from liquid balance or deposited directly
+        updatedBalance = Math.max(0, updatedBalance - txData.amount);
+      }
 
       return {
         ...prev,
@@ -314,6 +357,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           totalBalance: updatedBalance,
           monthlyIncome: updatedIncome,
           monthlyExpenses: updatedExpenses,
+          totalSavings: updatedSavings,
           spentToday: updatedSpentToday,
           weeklyBudgetLeft: updatedWeeklyBudget,
         },
@@ -326,53 +370,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const target = prev.transactions.find((t) => t.id === id);
       if (!target) return prev;
       const isExpense = target.type === 'expense';
+      const isIncome = target.type === 'income';
+      const isSavings = target.type === 'savings';
+
+      let updatedBalance = prev.financialSummary.totalBalance;
+      let updatedExpenses = prev.financialSummary.monthlyExpenses;
+      let updatedIncome = prev.financialSummary.monthlyIncome;
+      let updatedSavings = prev.financialSummary.totalSavings || 0;
+
+      if (isExpense) {
+        updatedBalance += target.amount;
+        updatedExpenses = Math.max(0, updatedExpenses - target.amount);
+      } else if (isIncome) {
+        updatedBalance = Math.max(0, updatedBalance - target.amount);
+        updatedIncome = Math.max(0, updatedIncome - target.amount);
+      } else if (isSavings) {
+        updatedSavings = Math.max(0, updatedSavings - target.amount);
+        updatedBalance += target.amount;
+      }
+
       return {
         ...prev,
         transactions: prev.transactions.filter((t) => t.id !== id),
         financialSummary: {
           ...prev.financialSummary,
-          totalBalance: isExpense ? prev.financialSummary.totalBalance + target.amount : prev.financialSummary.totalBalance - target.amount,
-          monthlyExpenses: isExpense ? Math.max(0, prev.financialSummary.monthlyExpenses - target.amount) : prev.financialSummary.monthlyExpenses,
-          monthlyIncome: !isExpense ? Math.max(0, prev.financialSummary.monthlyIncome - target.amount) : prev.financialSummary.monthlyIncome,
+          totalBalance: updatedBalance,
+          monthlyExpenses: updatedExpenses,
+          monthlyIncome: updatedIncome,
+          totalSavings: updatedSavings,
         },
       };
     });
   };
 
-  // Habits management
-  const toggleHabit = (id: string) => {
+  // Direct deposit or surplus transfer into Savings
+  const depositToSavings = (amount: number, note: string = 'Added to Savings') => {
+    if (amount <= 0) return;
     const todayStr = getLocalDateString(new Date());
-    setState((prev) => ({
-      ...prev,
-      habits: prev.habits.map((h) => {
-        if (h.id === id) {
-          const isDoneToday = h.lastCompletedDate === todayStr;
-          return {
-            ...h,
-            streak: isDoneToday ? Math.max(0, h.streak - 1) : h.streak + 1,
-            lastCompletedDate: isDoneToday ? undefined : todayStr,
-          };
-        }
-        return h;
-      }),
-    }));
+    addTransaction({
+      type: 'savings',
+      merchant: 'Savings Vault',
+      category: 'Savings',
+      amount,
+      date: todayStr,
+      note,
+    });
   };
 
-  const addHabit = (title: string, emoji: string) => {
-    const newH: Habit = {
-      id: `habit-${Date.now()}`,
-      title,
-      emoji: emoji || '✨',
-      streak: 0,
-    };
-    setState((prev) => ({ ...prev, habits: [...prev.habits, newH] }));
+  const transferSurplusToSavings = (customAmount?: number) => {
+    const surplus = Math.max(
+      0,
+      state.financialSummary.monthlyIncome - state.financialSummary.monthlyExpenses
+    );
+    const amountToTransfer = customAmount !== undefined ? customAmount : surplus;
+    if (amountToTransfer <= 0) return;
+    depositToSavings(amountToTransfer, 'Extra money surplus saved');
   };
 
-  const deleteHabit = (id: string) => {
-    setState((prev) => ({ ...prev, habits: prev.habits.filter((h) => h.id !== id) }));
-  };
-
-  // Daily Micro-Journal (uses getLocalDateString)
+  // Daily Micro-Journal
   const saveDailyNote = (text: string) => {
     const todayStr = getLocalDateString(new Date());
     setState((prev) => {
@@ -382,16 +437,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dailyNotes: text.trim() ? [{ date: todayStr, text: text.trim() }, ...existing] : existing,
       };
     });
-  };
-
-  const updateMonthlyBudget = (limit: number) => {
-    setState((prev) => ({
-      ...prev,
-      financialSummary: {
-        ...prev.financialSummary,
-        monthlyBudgetLimit: limit,
-      },
-    }));
   };
 
   const updateUserName = (name: string) => {
@@ -427,7 +472,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...INITIAL_APP_STATE,
       userName: state.userName || 'Yo Tyn',
       theme: state.theme || 'light',
-      habits: [],
+      alarmSoundEnabled: state.alarmSoundEnabled !== undefined ? state.alarmSoundEnabled : true,
+      alarmVibrationEnabled: state.alarmVibrationEnabled !== undefined ? state.alarmVibrationEnabled : true,
       dailyNotes: [],
     });
   };
@@ -443,11 +489,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const merged: AppState = {
           ...INITIAL_APP_STATE,
           ...parsed,
-          habits: parsed.habits || INITIAL_APP_STATE.habits,
+          alarmSoundEnabled: parsed.alarmSoundEnabled !== undefined ? parsed.alarmSoundEnabled : true,
+          alarmVibrationEnabled: parsed.alarmVibrationEnabled !== undefined ? parsed.alarmVibrationEnabled : true,
           dailyNotes: parsed.dailyNotes || [],
           financialSummary: {
             ...INITIAL_APP_STATE.financialSummary,
             ...(parsed.financialSummary || {}),
+            totalSavings: (parsed.financialSummary && parsed.financialSummary.totalSavings !== undefined)
+              ? parsed.financialSummary.totalSavings
+              : 0,
           },
         };
         setState(merged);
@@ -480,11 +530,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteEvent,
         addTransaction,
         deleteTransaction,
-        toggleHabit,
-        addHabit,
-        deleteHabit,
+        depositToSavings,
+        transferSurplusToSavings,
         saveDailyNote,
-        updateMonthlyBudget,
         updateUserName,
         updateCurrency,
         activeModal,
@@ -498,6 +546,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activeAlarm,
         alarmSound,
         setAlarmSound,
+        alarmSoundEnabled: state.alarmSoundEnabled !== false,
+        toggleAlarmSound,
+        alarmVibrationEnabled: state.alarmVibrationEnabled !== false,
+        toggleAlarmVibration,
         dismissAlarm,
         snoozeAlarm,
         testAlarm,

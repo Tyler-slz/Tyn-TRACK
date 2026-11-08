@@ -3,23 +3,20 @@ import { AppState } from './types';
 export const INITIAL_APP_STATE: AppState = {
   userName: 'Yo Tyn',
   theme: 'light',
+  alarmSoundEnabled: true,
+  alarmVibrationEnabled: true,
   tasks: [],
   events: [],
   transactions: [],
-  habits: [
-    { id: 'habit-1', title: 'Drink 2L Water', emoji: '💧', streak: 0 },
-    { id: 'habit-2', title: 'Morning Stretch', emoji: '🧘', streak: 0 },
-    { id: 'habit-3', title: 'Read 10 mins', emoji: '📖', streak: 0 },
-  ],
   dailyNotes: [],
   financialSummary: {
     totalBalance: 0,
     monthlyIncome: 0,
     monthlyExpenses: 0,
+    totalSavings: 0,
     spentToday: 0,
     weeklyBudgetLeft: 0,
     weeklyBudgetTotal: 0,
-    monthlyBudgetLimit: 10000,
     currencySymbol: '₱',
     currencyCode: 'PHP',
   },
@@ -41,11 +38,15 @@ export function loadStoredAppState(): AppState {
     return {
       ...INITIAL_APP_STATE,
       ...parsed,
-      habits: parsed.habits || INITIAL_APP_STATE.habits,
+      alarmSoundEnabled: parsed.alarmSoundEnabled !== undefined ? parsed.alarmSoundEnabled : true,
+      alarmVibrationEnabled: parsed.alarmVibrationEnabled !== undefined ? parsed.alarmVibrationEnabled : true,
       dailyNotes: parsed.dailyNotes || [],
       financialSummary: {
         ...INITIAL_APP_STATE.financialSummary,
         ...(parsed.financialSummary || {}),
+        totalSavings: (parsed.financialSummary && parsed.financialSummary.totalSavings !== undefined)
+          ? parsed.financialSummary.totalSavings
+          : 0,
       },
     };
   } catch (err) {
@@ -67,11 +68,7 @@ export function completelyWipeLocalStorage(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      ...INITIAL_APP_STATE,
-      habits: [],
-      dailyNotes: [],
-    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_APP_STATE));
   } catch (err) {
     console.error('Failed to clear localStorage:', err);
   }
