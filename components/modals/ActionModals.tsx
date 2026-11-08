@@ -36,6 +36,7 @@ export function ActionModals() {
     importBackup,
     clearAllData,
     testAlarm,
+    enableNotifications,
     alarmSound,
     setAlarmSound,
     alarmSoundEnabled,
@@ -125,9 +126,12 @@ export function ActionModals() {
     return `${h}:${m} ${ampm}`;
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskTitle.trim()) return;
+    if (taskRemindMe) {
+      await enableNotifications();
+    }
     addTask({
       title: taskTitle.trim(),
       details: taskDetails.trim(),
@@ -142,9 +146,12 @@ export function ActionModals() {
     closeModal();
   };
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitle.trim()) return;
+    if (eventRemindMe) {
+      await enableNotifications();
+    }
     addEvent({
       title: eventTitle.trim(),
       location: eventLocation.trim(),
@@ -344,6 +351,43 @@ export function ActionModals() {
                   <span>Test Alarm</span>
                 </button>
               </div>
+
+              {/* Enable Phone System Notifications Button */}
+              <button
+                type="button"
+                onClick={async () => {
+                  const granted = await enableNotifications();
+                  if (granted) {
+                    testAlarm();
+                  }
+                }}
+                className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all active:scale-[0.99] ${
+                  typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                    ? isDark ? 'bg-[#17231D] border-[#283A2E] text-[#7CC79E]' : 'bg-[#EDF5EC] border-[#DBE9DA] text-[#274E3C]'
+                    : isDark ? 'bg-[#221B1A] border-[#382624] text-amber-400' : 'bg-[#FFF7ED] border-[#FED7AA] text-amber-700'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Volume2 className="w-4 h-4 shrink-0" />
+                  <div>
+                    <p className="text-[13px] font-semibold">
+                      {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                        ? 'Phone Notifications Active'
+                        : 'Allow Phone Notifications'}
+                    </p>
+                    <p className={`text-[11px] opacity-85`}>
+                      {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                        ? 'Alarms will alert your whole phone even if screen is locked'
+                        : 'Tap here to allow system alerts & vibrations'}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold py-1 px-2.5 rounded-lg bg-black/10 dark:bg-white/10 shrink-0">
+                  {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+                    ? 'Active'
+                    : 'Enable'}
+                </span>
+              </button>
 
               {/* Alarm Chime Sound Toggle */}
               <div
@@ -697,7 +741,13 @@ export function ActionModals() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setTaskRemindMe(!taskRemindMe)}
+                  onClick={async () => {
+                    const next = !taskRemindMe;
+                    setTaskRemindMe(next);
+                    if (next) {
+                      await enableNotifications();
+                    }
+                  }}
                   className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center ${
                     taskRemindMe ? 'bg-[#274E3C]' : 'bg-[#CBD6CC]'
                   }`}
@@ -818,7 +868,13 @@ export function ActionModals() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEventRemindMe(!eventRemindMe)}
+                  onClick={async () => {
+                    const next = !eventRemindMe;
+                    setEventRemindMe(next);
+                    if (next) {
+                      await enableNotifications();
+                    }
+                  }}
                   className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center ${
                     eventRemindMe ? 'bg-[#274E3C]' : 'bg-[#CBD6CC]'
                   }`}

@@ -315,6 +315,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (state.alarmVibrationEnabled !== false) {
       triggerVibration();
     }
+    sendLocalNotification(
+      'Tyn Alarm Test',
+      'Phone vibration and system alerts are working properly.'
+    );
     setActiveAlarm({
       id: 'test-alarm',
       title: 'Reminder preview',

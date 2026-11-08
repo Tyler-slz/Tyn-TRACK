@@ -1,8 +1,8 @@
-const CACHE_NAME = 'lifeflow-v2';
+const CACHE_NAME = 'lifeflow-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
-  '/favicon.ico',
+  '/favicon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
@@ -31,13 +31,26 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Native Notification Click Handler
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('/');
+      }
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
-
   const url = new URL(event.request.url);
-
-  // Avoid caching browser extensions or non-http schemes
   if (!url.protocol.startsWith('http')) return;
 
   event.respondWith(
@@ -52,10 +65,7 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          // If offline and request fails, return cached response if present
-          return cachedResponse;
-        });
+        .catch(() => cachedResponse);
 
       return cachedResponse || fetchPromise;
     })

@@ -15,7 +15,6 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
     const now = ctx.currentTime;
 
     if (soundType === 'marimba') {
-      // Warm marimba arpeggio: C5 -> E5 -> G5 -> C6
       const freqs = [523.25, 659.25, 783.99, 1046.50];
       freqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
@@ -24,7 +23,7 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
         osc.frequency.setValueAtTime(freq, now + idx * 0.12);
 
         gain.gain.setValueAtTime(0, now + idx * 0.12);
-        gain.gain.linearRampToValueAtTime(0.3, now + idx * 0.12 + 0.02);
+        gain.gain.linearRampToValueAtTime(0.35, now + idx * 0.12 + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.12 + 0.8);
 
         osc.connect(gain);
@@ -33,7 +32,6 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
         osc.stop(now + idx * 0.12 + 0.85);
       });
     } else if (soundType === 'pulse') {
-      // Modern soft digital pulse
       const freqs = [880, 880, 1174.66];
       freqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
@@ -42,7 +40,7 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
         osc.frequency.setValueAtTime(freq, now + idx * 0.15);
 
         gain.gain.setValueAtTime(0, now + idx * 0.15);
-        gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.15 + 0.02);
+        gain.gain.linearRampToValueAtTime(0.3, now + idx * 0.15 + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.15 + 0.35);
 
         osc.connect(gain);
@@ -51,7 +49,6 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
         osc.stop(now + idx * 0.15 + 0.4);
       });
     } else {
-      // Default: Harmonic Zen Bell chime (F#5 -> A#5 -> C#6)
       const freqs = [739.99, 932.33, 1108.73];
       freqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
@@ -60,7 +57,7 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
         osc.frequency.setValueAtTime(freq, now + idx * 0.16);
 
         gain.gain.setValueAtTime(0, now + idx * 0.16);
-        gain.gain.linearRampToValueAtTime(0.25, now + idx * 0.16 + 0.04);
+        gain.gain.linearRampToValueAtTime(0.35, now + idx * 0.16 + 0.04);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.16 + 1.4);
 
         osc.connect(gain);
@@ -74,13 +71,14 @@ export function playChimeSound(soundType: AlarmSoundType = 'zen') {
   }
 }
 
-// Mobile vibration pattern if supported
+// Mobile vibration pattern for full phone buzz
 export function triggerVibration() {
   if (typeof window !== 'undefined' && 'vibrate' in navigator) {
     try {
-      navigator.vibrate([200, 100, 200, 100, 400]);
+      // Long distinct pattern: buzz, pause, buzz, pause, long buzz
+      navigator.vibrate([400, 150, 400, 150, 800]);
     } catch (e) {
-      // Ignore if not supported/permitted
+      // Ignore if not permitted
     }
   }
 }
@@ -95,34 +93,57 @@ export async function requestNotificationPermission(): Promise<boolean> {
     return true;
   }
 
-  if (Notification.permission !== 'denied') {
+  try {
     const permission = await Notification.requestPermission();
     return permission === 'granted';
+  } catch (e) {
+    return false;
   }
-
-  return false;
 }
 
-// Send native notification
+// Send phone-wide native notification with sound and vibration
 export function sendLocalNotification(title: string, body: string) {
   if (typeof window === 'undefined') return;
 
   if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(title, {
-        body,
-        icon: '/icons/icon-192.png',
-        badge: '/icons/icon-192.png',
-      });
-    } catch (e) {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
-        navigator.serviceWorker.ready.then((reg) => {
+    // Try via ServiceWorkerRegistration for full Android system heads-up notification
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then((reg) => {
           reg.showNotification(title, {
             body,
             icon: '/icons/icon-192.png',
             badge: '/icons/icon-192.png',
-          });
+            vibrate: [400, 150, 400, 150, 800],
+            tag: `tyn-alarm-${Date.now()}`,
+            renotify: true,
+            requireInteraction: true,
+          } as any);
+        })
+        .catch(() => {
+          try {
+            new Notification(title, {
+              body,
+              icon: '/icons/icon-192.png',
+              badge: '/icons/icon-192.png',
+              vibrate: [400, 150, 400, 150, 800],
+              requireInteraction: true,
+            } as any);
+          } catch (err) {
+            console.warn('Direct notification error:', err);
+          }
         });
+    } else {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/icons/icon-192.png',
+          badge: '/icons/icon-192.png',
+          vibrate: [400, 150, 400, 150, 800],
+          requireInteraction: true,
+        } as any);
+      } catch (err) {
+        console.warn('Fallback notification error:', err);
       }
     }
   }
