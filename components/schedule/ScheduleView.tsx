@@ -3,11 +3,15 @@
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { getCurrentWeekDays, getTodayShort, getLocalDateString } from '@/lib/time';
+import { getGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar';
 import {
   Plus,
   Moon,
   Trash2,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Bell,
+  CalendarPlus,
+  ExternalLink
 } from 'lucide-react';
 
 export function ScheduleView() {
@@ -141,10 +145,18 @@ export function ScheduleView() {
                     : 'bg-[#EFF5ED] border-[#DEE8DD]'
                 }`}
               >
-                <div>
-                  <p className={`font-semibold text-[14px] ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
-                    {event.title}
-                  </p>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-1.5">
+                    <p className={`font-semibold text-[14px] ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
+                      {event.title}
+                    </p>
+                    {event.remindMe && (
+                      <span className="text-[10px] py-0.5 px-1.5 rounded-full bg-[#274E3C]/10 text-[#274E3C] dark:text-[#7CC79E] font-medium flex items-center space-x-0.5">
+                        <Bell className="w-2.5 h-2.5 inline" />
+                        <span>Alert</span>
+                      </span>
+                    )}
+                  </div>
                   <p className={`text-[11px] mt-0.5 ${isDark ? 'text-[#8DA094]' : 'text-[#66776B]'}`}>
                     {event.startTime} – {event.endTime} {event.location ? `· ${event.location}` : ''}
                   </p>
@@ -153,6 +165,53 @@ export function ScheduleView() {
                       {event.notes}
                     </p>
                   )}
+
+                  {/* Sync to Phone Alarm & Calendar Buttons */}
+                  <div className="flex items-center space-x-2 mt-2.5 pt-2 border-t border-black/5 dark:border-white/5">
+                    <a
+                      href={getGoogleCalendarUrl(
+                        event.title,
+                        event.date || selectedDateStr,
+                        event.startTime,
+                        event.endTime,
+                        event.location,
+                        event.notes
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-[10px] font-semibold py-1 px-2.5 rounded-lg border transition-all flex items-center space-x-1 active:scale-95 ${
+                        isDark
+                          ? 'bg-[#17231D] border-[#2A3B30] text-[#7CC79E] hover:bg-[#1E2E25]'
+                          : 'bg-white border-[#DBE5D8] text-[#274E3C] hover:bg-[#FAFBF9]'
+                      }`}
+                      title="Sync to Google Calendar with alarm reminder"
+                    >
+                      <CalendarPlus className="w-3 h-3" />
+                      <span>Sync Phone Alarm</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadIcsFile(
+                          event.title,
+                          event.date || selectedDateStr,
+                          event.startTime,
+                          event.endTime,
+                          event.location,
+                          event.notes
+                        )
+                      }
+                      className={`text-[10px] font-semibold py-1 px-2 rounded-lg border transition-all flex items-center space-x-1 active:scale-95 ${
+                        isDark
+                          ? 'bg-[#1A241F] border-[#253229] text-[#9CB3A5]'
+                          : 'bg-[#F4F6F2] border-[#E2E8DF] text-[#55695B]'
+                      }`}
+                      title="Download .ICS file to add directly to Samsung / Android Calendar"
+                    >
+                      <span>.ICS</span>
+                    </button>
+                  </div>
                 </div>
                 <button
                   onClick={() => deleteEvent(event.id)}

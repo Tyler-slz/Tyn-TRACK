@@ -101,7 +101,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Alarm state
   const [activeAlarm, setActiveAlarm] = useState<ActiveAlarm | null>(null);
-  const [notifiedAlarms, setNotifiedAlarms] = useState<Set<string>>(new Set());
+  const [notifiedAlarms, setNotifiedAlarms] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('tyn_notified_alarms_v1');
+        if (stored) {
+          return new Set(JSON.parse(stored));
+        }
+      } catch (e) {
+        // Ignore JSON error
+      }
+    }
+    return new Set();
+  });
 
   // PWA Install state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -196,7 +208,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Alarm Monitor loop
+  // Alarm Monitor loop with background wake catch
   useEffect(() => {
     if (!isHydrated) return;
 
@@ -204,7 +216,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const now = new Date();
       const currentHours = now.getHours();
       const currentMinutes = now.getMinutes();
+      const nowTotalMinutes = currentHours * 60 + currentMinutes;
       const todayStr = getLocalDateString(now);
+
+      let updatedKeys: string[] = [];
 
       // Check tasks
       state.tasks.forEach((task) => {
@@ -214,17 +229,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const parsed = parseTimeString(task.dueTime);
         if (!parsed) return;
 
-        if (parsed.hours === currentHours && parsed.minutes === currentMinutes) {
-          const alarmKey = `task-${task.id}-${todayStr}-${currentHours}:${currentMinutes}`;
+        const taskTotalMinutes = parsed.hours * 60 + parsed.minutes;
+        const diff = nowTotalMinutes - taskTotalMinutes;
+
+        // Trigger if:
+        // 1. Current minute (diff === 0)
+        // 2. OR phone was asleep / locked and woke up within the last 180 mins
+        if (diff >= 0 && diff <= 180) {
+          const alarmKey = `task-${task.id}-${todayStr}`;
           if (!notifiedAlarms.has(alarmKey)) {
             triggerAlarm({
               id: task.id,
-              title: task.title,
+              title: diff <= 1 ? task.title : `[Reminder] ${task.title}`,
               time: task.dueTime,
-              category: task.category,
+              category: diff > 1 ? `Due ${diff}m ago · ${task.category || ''}` : task.category,
               type: 'task',
             });
-            setNotifiedAlarms((prev) => new Set(prev).add(alarmKey));
+            updatedKeys.push(alarmKey);
           }
         }
       });
@@ -237,24 +258,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const parsed = parseTimeString(event.startTime);
         if (!parsed) return;
 
-        if (parsed.hours === currentHours && parsed.minutes === currentMinutes) {
-          const alarmKey = `event-${event.id}-${todayStr}-${currentHours}:${currentMinutes}`;
+        const eventTotalMinutes = parsed.hours * 60 + parsed.minutes;
+        const diff = nowTotalMinutes - eventTotalMinutes;
+
+        // Trigger if:
+        // 1. Current minute (diff === 0)
+        // 2. OR phone was asleep / locked and woke up within the last 180 mins
+        if (diff >= 0 && diff <= 180) {
+          const alarmKey = `event-${event.id}-${todayStr}`;
           if (!notifiedAlarms.has(alarmKey)) {
             triggerAlarm({
               id: event.id,
-              title: event.title,
+              title: diff <= 1 ? event.title : `[Reminder] ${event.title}`,
               time: event.startTime,
-              category: event.location,
+              category: diff > 1 ? `Started ${diff}m ago · ${event.location || ''}` : event.location,
               type: 'event',
             });
-            setNotifiedAlarms((prev) => new Set(prev).add(alarmKey));
+            updatedKeys.push(alarmKey);
           }
         }
       });
+
+      if (updatedKeys.length > 0) {
+        setNotifiedAlarms((prev) => {
+          const next = new Set(prev);
+          updatedKeys.forEach((k) => next.add(k));
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('tyn_notified_alarms_v1', JSON.stringify(Array.from(next)));
+            }
+          } catch (e) {}
+          return next;
+        });
+      }
     };
 
+    // Run immediately when mounted or when user wakes up phone
+    checkAlarms();
+
+    const handleWake = () => {
+      checkAlarms();
+    };
+
+    window.addEventListener('visibilitychange', handleWake);
+    window.addEventListener('focus', handleWake);
+
     const alarmInterval = setInterval(checkAlarms, 10000);
-    return () => clearInterval(alarmInterval);
+    return () => {
+      clearInterval(alarmInterval);
+      window.removeEventListener('visibilitychange', handleWake);
+      window.removeEventListener('focus', handleWake);
+    };
   }, [isHydrated, state.tasks, state.events, notifiedAlarms, state.alarmSoundEnabled, state.alarmVibrationEnabled, alarmSound]);
 
   const toggleTheme = () => {

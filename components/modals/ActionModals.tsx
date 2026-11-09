@@ -932,7 +932,7 @@ export function ActionModals() {
               <div className="flex items-center justify-between">
                 <div className={`flex items-center space-x-2 text-[14px] font-semibold ${isDark ? 'text-[#7CC79E]' : 'text-[#274E3C]'}`}>
                   <Clock className="w-4 h-4" />
-                  <span>Remind me</span>
+                  <span>Remind me in Tyn</span>
                 </div>
                 <button
                   type="button"
@@ -955,7 +955,20 @@ export function ActionModals() {
                 </button>
               </div>
               <p className={`text-[11px] ${isDark ? 'text-[#8EA597]' : 'text-[#69796D]'}`}>
-                Alarm will ring at event start time ({formatTimeDisplay(eventStartTime)}).
+                Alarm rings at event start time ({formatTimeDisplay(eventStartTime)}).
+              </p>
+            </div>
+
+            {/* Direct Google Calendar / Phone Hardware Alarm Notice */}
+            <div className={`rounded-2xl p-3.5 border space-y-1.5 ${isDark ? 'bg-[#17231D] border-[#2A3B30]' : 'bg-[#F2F7F1] border-[#DBE7DA]'}`}>
+              <div className="flex items-center space-x-1.5">
+                <Calendar className={`w-3.5 h-3.5 ${isDark ? 'text-[#7CC79E]' : 'text-[#274E3C]'}`} />
+                <span className={`text-[12px] font-semibold ${isDark ? 'text-[#7CC79E]' : 'text-[#274E3C]'}`}>
+                  Critical Alarms (Classes & Exams)
+                </span>
+              </div>
+              <p className={`text-[11px] leading-relaxed ${isDark ? 'text-[#8EA397]' : 'text-[#69796D]'}`}>
+                For classes or exams: after saving, tap <b>"Sync Phone Alarm"</b> on the event card. This links directly to your phone's hardware alarm so it rings at full volume even when your phone is asleep or screen is locked.
               </p>
             </div>
 
