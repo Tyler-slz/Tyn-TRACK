@@ -2,6 +2,13 @@
  * On-device offline alarm chime and notifications
  */
 
+import {
+  getNativeNotificationStatus,
+  isNativeApp,
+  requestNativeNotificationAccess,
+  sendNativeInstantNotification,
+} from './nativeAlarms';
+
 export type AlarmSoundType = 'zen' | 'marimba' | 'pulse';
 
 export function playChimeSound(soundType: AlarmSoundType = 'zen') {
@@ -85,6 +92,10 @@ export function triggerVibration() {
 
 // Request permission for native system notifications
 export async function requestNotificationPermission(): Promise<boolean> {
+  if (isNativeApp()) {
+    return await requestNativeNotificationAccess();
+  }
+
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return false;
   }
@@ -103,7 +114,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 export interface NotificationDispatchResult {
   ok: boolean;
-  method: 'service-worker' | 'window' | 'none';
+  method: 'capacitor-native' | 'service-worker' | 'window' | 'none';
   permission: NotificationPermission | 'unsupported';
   swState: string;
   detail: string;
@@ -156,6 +167,25 @@ export async function sendLocalNotificationDetailed(
 ): Promise<NotificationDispatchResult> {
   if (typeof window === 'undefined') {
     return { ok: false, method: 'none', permission: 'unsupported', swState: 'ssr', detail: 'Not in browser.' };
+  }
+
+  if (isNativeApp()) {
+    const status = await getNativeNotificationStatus();
+    const ok = await sendNativeInstantNotification(title, body);
+    const after = await getNativeNotificationStatus();
+    const mappedPerm: NotificationPermission | 'unsupported' =
+      after.display === 'granted' ? 'granted' : after.display === 'denied' ? 'denied' : 'default';
+    return {
+      ok,
+      method: ok ? 'capacitor-native' : 'none',
+      permission: mappedPerm,
+      swState: `native(${after.exactAlarm === 'granted' ? 'exact' : 'inexact'})`,
+      detail: ok
+        ? 'Native Android notification delivered.'
+        : status.display === 'denied'
+        ? 'Notifications are disabled for Tyn in Android App Info.'
+        : 'Enable notifications for Tyn when prompted.',
+    };
   }
 
   if (!('Notification' in window)) {

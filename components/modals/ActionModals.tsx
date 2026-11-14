@@ -21,6 +21,13 @@ import {
 } from 'lucide-react';
 import { Category } from '@/lib/types';
 import { AlarmSoundType, sendLocalNotificationDetailed, triggerVibration } from '@/lib/alarm';
+import {
+  getNativeNotificationStatus,
+  isNativeApp,
+  openNativeExactAlarmSettings,
+  scheduleNativeTestAlarm,
+  syncAllNativeAlarms,
+} from '@/lib/nativeAlarms';
 
 export function ActionModals() {
   const {
@@ -60,23 +67,41 @@ export function ActionModals() {
   const [tempSymbol, setTempSymbol] = useState(state.financialSummary.currencySymbol);
   const [tempCode, setTempCode] = useState(state.financialSummary.currencyCode);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const nativeMode = isNativeApp();
   const [notifPermission, setNotifPermission] = useState<string>('default');
+  const [exactAlarmStatus, setExactAlarmStatus] = useState<'granted' | 'denied' | 'unsupported'>('unsupported');
   const [testNotifFeedback, setTestNotifFeedback] = useState<string | null>(null);
   const [delayedTestSeconds, setDelayedTestSeconds] = useState<number | null>(null);
   const [showPhoneGuide, setShowPhoneGuide] = useState(false);
 
-  useEffect(() => {
+  const refreshNotificationStatus = async () => {
+    if (isNativeApp()) {
+      const status = await getNativeNotificationStatus();
+      setNotifPermission(status.display === 'granted' ? 'granted' : status.display === 'denied' ? 'denied' : 'default');
+      setExactAlarmStatus(status.exactAlarm);
+      return;
+    }
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPermission(Notification.permission);
     }
+  };
+
+  useEffect(() => {
+    void refreshNotificationStatus();
+    if (typeof window === 'undefined') return;
+    const onFocus = () => void refreshNotificationStatus();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [activeModal]);
 
   useEffect(() => {
     if (delayedTestSeconds === null) return;
     if (delayedTestSeconds === 0) {
       setDelayedTestSeconds(null);
-      triggerVibration();
-      void runDiagnosticNotification('Tyn Background Test', 'Notification bar test while outside Tyn!');
+      if (!isNativeApp()) {
+        triggerVibration();
+        void runDiagnosticNotification('Tyn Background Test', 'Notification bar test while outside Tyn!');
+      }
       return;
     }
     const timer = setTimeout(() => {
@@ -87,19 +112,23 @@ export function ActionModals() {
 
   const runDiagnosticNotification = async (title: string, body: string) => {
     const res = await sendLocalNotificationDetailed(title, body);
-    setNotifPermission(res.permission);
+    await refreshNotificationStatus();
     if (res.permission === 'denied') {
       setTestNotifFeedback(
-        '⚠️ Blocked in Chrome site settings. Tap the 🔒/tune icon next to the URL → Permissions → Notifications → Allow.'
+        isNativeApp()
+          ? '⚠️ Notifications blocked. Open Phone Settings → Apps → Tyn → Notifications → Allow.'
+          : '⚠️ Blocked in Chrome site settings. Tap the 🔒/tune icon next to the URL → Permissions → Notifications → Allow.'
       );
       return res;
     }
     if (!res.ok) {
-      setTestNotifFeedback(`❌ ${res.detail} (Permission: ${res.permission}, SW: ${res.swState})`);
+      setTestNotifFeedback(`❌ ${res.detail} (Permission: ${res.permission}, Mode: ${res.swState})`);
       return res;
     }
     setTestNotifFeedback(
-      `✓ Sent via ${res.method} (SW: ${res.swState}). If it did not show in your notification bar, check the Infinix/Android guide below.`
+      isNativeApp()
+        ? `✓ Sent native Android alert (${res.swState}).`
+        : `✓ Sent via ${res.method} (SW: ${res.swState}). If it did not show in your notification bar, check the Infinix/Android guide below.`
     );
     return res;
   };
@@ -388,10 +417,20 @@ export function ActionModals() {
                 <div className="flex items-center space-x-2.5">
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (delayedTestSeconds !== null) {
                         setDelayedTestSeconds(null);
                         setTestNotifFeedback(null);
+                      } else if (nativeMode) {
+                        setTestNotifFeedback('Scheduling native Android 5s AlarmManager test...');
+                        const res = await scheduleNativeTestAlarm(5);
+                        await refreshNotificationStatus();
+                        if (res.ok) {
+                          setDelayedTestSeconds(5);
+                          setTestNotifFeedback(`Swipe home, lock screen, or close Tyn now — ${res.detail}`);
+                        } else {
+                          setTestNotifFeedback(`⚠️ ${res.detail}`);
+                        }
                       } else {
                         setDelayedTestSeconds(5);
                         setTestNotifFeedback('Swipe home or lock screen now — sending phone notification in 5s...');
@@ -425,6 +464,28 @@ export function ActionModals() {
                 type="button"
                 onClick={async () => {
                   if (typeof window === 'undefined') return;
+                  if (nativeMode) {
+                    setTestNotifFeedback('Checking Android notification & exact alarm permissions...');
+                    const granted = await enableNotifications();
+                    await refreshNotificationStatus();
+                    if (!granted) {
+                      setTestNotifFeedback(
+                        '⚠️ Permission was not granted. Open Phone Settings → Apps → Tyn → Notifications → Allow.'
+                      );
+                      return;
+                    }
+                    const status = await getNativeNotificationStatus();
+                    if (status.exactAlarm !== 'granted') {
+                      await openNativeExactAlarmSettings();
+                      await refreshNotificationStatus();
+                    }
+                    const syncRes = await syncAllNativeAlarms(state.tasks, state.events);
+                    await runDiagnosticNotification(
+                      'Tyn Native Alarms Active',
+                      `${syncRes.scheduledCount} upcoming reminder(s) synced (${syncRes.exactAlarm === 'granted' ? 'Exact timing' : 'Inexact fallback'}).`
+                    );
+                    return;
+                  }
                   if (!('Notification' in window)) {
                     setTestNotifFeedback('Notifications are not supported in this browser. Open Tyn in Google Chrome.');
                     return;
@@ -448,7 +509,7 @@ export function ActionModals() {
                   }
                 }}
                 className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all active:scale-[0.99] ${
-                  notifPermission === 'granted'
+                  notifPermission === 'granted' && (!nativeMode || exactAlarmStatus === 'granted')
                     ? isDark ? 'bg-[#17231D] border-[#283A2E] text-[#7CC79E]' : 'bg-[#EDF5EC] border-[#DBE9DA] text-[#274E3C]'
                     : notifPermission === 'denied'
                     ? isDark ? 'bg-[#291717] border-[#4A2626] text-rose-400' : 'bg-[#FDF2F2] border-[#F8D7DA] text-rose-700'
@@ -460,23 +521,35 @@ export function ActionModals() {
                   <div>
                     <p className="text-[13px] font-semibold">
                       {notifPermission === 'granted'
-                        ? 'Phone Notifications Active'
+                        ? nativeMode && exactAlarmStatus === 'denied'
+                          ? 'Allow Exact Alarms (Android 14)'
+                          : nativeMode
+                          ? 'Native Android Alarms Active'
+                          : 'Phone Notifications Active'
                         : notifPermission === 'denied'
-                        ? 'Notifications Blocked in Chrome'
+                        ? nativeMode
+                          ? 'Notifications Disabled in Android'
+                          : 'Notifications Blocked in Chrome'
                         : 'Allow Phone Notifications'}
                     </p>
                     <p className="text-[11px] opacity-85">
                       {notifPermission === 'granted'
-                        ? 'Tap to send test alert to notification bar'
+                        ? nativeMode && exactAlarmStatus === 'denied'
+                          ? 'Tap to allow "Alarms & reminders" for exact timing when closed'
+                          : 'Tap to send test alert to notification bar'
                         : notifPermission === 'denied'
-                        ? 'Tap to see how to unblock in Chrome'
+                        ? nativeMode
+                          ? 'Phone Settings → Apps → Tyn → Notifications → Allow'
+                          : 'Tap to see how to unblock in Chrome'
                         : 'Tap here to allow system alerts & vibrations'}
                     </p>
                   </div>
                 </div>
                 <span className="text-[11px] font-bold py-1 px-2.5 rounded-lg bg-black/10 dark:bg-white/10 shrink-0">
                   {notifPermission === 'granted'
-                    ? 'Active'
+                    ? nativeMode && exactAlarmStatus === 'denied'
+                      ? 'Fix Exact'
+                      : 'Active'
                     : notifPermission === 'denied'
                     ? 'Blocked'
                     : 'Enable'}
@@ -508,10 +581,21 @@ export function ActionModals() {
                 </button>
                 {showPhoneGuide && (
                   <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-black/5 dark:border-white/5 leading-relaxed">
-                    <p><b>1. Chrome "Sites" Channel:</b> Phone Settings → Apps → <b>Chrome</b> → Notifications → Notification categories → <b>Sites</b> → set <b>Importance: High/Alert</b> & turn ON <b>Floating / Pop on screen</b> + <b>Status bar</b>.</p>
-                    <p><b>2. Show Silent Icons:</b> Phone Settings → Notification Center → More settings → turn <b>OFF</b> "Hide silent notifications in status bar".</p>
-                    <p><b>3. XOS Battery & Game Mode:</b> Set Chrome & Tyn Battery to <b>Unrestricted</b>, and check Phone Master / XArena isn't blocking notifications.</p>
-                    <p><b>4. Test outside app:</b> Tap <b>"5s Outside Test"</b> above and swipe to your Home screen.</p>
+                    {nativeMode ? (
+                      <>
+                        <p><b>1. Exact Alarms:</b> Phone Settings → Apps → <b>Tyn</b> → Alarms &amp; reminders → allow <b>Setting alarms and reminders</b>.</p>
+                        <p><b>2. Tyn Notification Channel:</b> Phone Settings → Apps → <b>Tyn</b> → Notifications → <b>Tyn Reminders &amp; Alarms</b> → set <b>Importance: High/Urgent</b> &amp; turn ON <b>Floating / Lock screen / Status bar</b>.</p>
+                        <p><b>3. XOS Battery &amp; Auto-start:</b> Phone Settings → Apps → <b>Tyn</b> → Battery → set <b>Unrestricted</b>, and enable <b>Auto-start</b> in Phone Master so reboot/Doze alarms stay reliable.</p>
+                        <p><b>4. Offline Closed-App Test:</b> Tap <b>&quot;5s Outside Test&quot;</b> above and lock/swipe home — native AlarmManager will fire even with Tyn closed.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p><b>1. Chrome &quot;Sites&quot; Channel:</b> Phone Settings → Apps → <b>Chrome</b> → Notifications → Notification categories → <b>Sites</b> → set <b>Importance: High/Alert</b> &amp; turn ON <b>Floating / Pop on screen</b> + <b>Status bar</b>.</p>
+                        <p><b>2. Show Silent Icons:</b> Phone Settings → Notification Center → More settings → turn <b>OFF</b> &quot;Hide silent notifications in status bar&quot;.</p>
+                        <p><b>3. XOS Battery &amp; Game Mode:</b> Set Chrome &amp; Tyn Battery to <b>Unrestricted</b>, and check Phone Master / XArena isn&apos;t blocking notifications.</p>
+                        <p><b>4. Test outside app:</b> Tap <b>&quot;5s Outside Test&quot;</b> above and swipe to your Home screen.</p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

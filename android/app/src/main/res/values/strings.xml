@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Tyn</string>
+    <string name="title_activity_main">Tyn</string>
+    <string name="package_name">com.tyn.track</string>
+    <string name="custom_url_scheme">com.tyn.track</string>
+</resources>

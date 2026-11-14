@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useApp } from '@/context/AppContext';
 import { TabType } from '@/lib/types';
+import { isNativeApp } from '@/lib/nativeAlarms';
 import { useMinuteClock } from '@/lib/useMinuteClock';
 import { DashboardView } from '@/components/dashboard/DashboardView';
 import { AlarmOverlay } from '@/components/alarm/AlarmOverlay';
@@ -58,9 +59,9 @@ export function AppShell() {
 
   const isDark = theme === 'dark';
 
-  // Register service worker for offline PWA capabilities & system notifications
+  // Register service worker for offline PWA capabilities & system notifications (web only)
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !isNativeApp()) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {

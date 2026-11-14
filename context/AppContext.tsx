@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AppState, CalendarEvent, TabType, Task, Transaction, DailyNote } from '@/lib/types';
 import {
   INITIAL_APP_STATE,
@@ -24,6 +24,13 @@ import {
   sendLocalNotification,
   AlarmSoundType,
 } from '@/lib/alarm';
+import {
+  cancelAllNativeAlarms,
+  ensureNativeAlarmChannel,
+  isNativeApp,
+  scheduleNativeSnooze,
+  syncAllNativeAlarms,
+} from '@/lib/nativeAlarms';
 
 export interface ActiveAlarm {
   id: string;
@@ -87,6 +94,8 @@ const AppContext = createContext<AppContextValue | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [state, setState] = useState<AppState>(INITIAL_APP_STATE);
+  const latestStateRef = useRef<AppState>(state);
+  latestStateRef.current = state;
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [prefilledTime, setPrefilledTime] = useState<string>('12:00');
@@ -123,6 +132,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isRunningStandalone =
+        isNativeApp() ||
         window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true;
       setIsStandalone(isRunningStandalone);
@@ -320,6 +330,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isHydrated, state.tasks, state.events, notifiedAlarms, state.alarmSoundEnabled, state.alarmVibrationEnabled, alarmSound]);
 
+  // Keep native Android AlarmManager schedules synced cleanly whenever tasks/events change
+  useEffect(() => {
+    if (!isHydrated || !isNativeApp()) return;
+    void ensureNativeAlarmChannel();
+    void syncAllNativeAlarms(state.tasks, state.events);
+  }, [isHydrated, state.tasks, state.events]);
+
+  // Re-sync native alarms when app returns to foreground (e.g., after granting Android permissions)
+  useEffect(() => {
+    if (!isHydrated || !isNativeApp()) return;
+    const handleForegroundSync = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void syncAllNativeAlarms(latestStateRef.current.tasks, latestStateRef.current.events);
+      }
+    };
+    window.addEventListener('visibilitychange', handleForegroundSync);
+    window.addEventListener('focus', handleForegroundSync);
+    return () => {
+      window.removeEventListener('visibilitychange', handleForegroundSync);
+      window.removeEventListener('focus', handleForegroundSync);
+    };
+  }, [isHydrated]);
+
   const toggleTheme = () => {
     setState((prev) => ({
       ...prev,
@@ -350,10 +383,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (state.alarmVibrationEnabled !== false) {
       triggerVibration();
     }
-    sendLocalNotification(
-      `Reminder: ${alarm.title}`,
-      `Scheduled for ${alarm.time}${alarm.category ? ` · ${alarm.category}` : ''}`
-    );
+    if (!isNativeApp()) {
+      sendLocalNotification(
+        `Reminder: ${alarm.title}`,
+        `Scheduled for ${alarm.time}${alarm.category ? ` · ${alarm.category}` : ''}`
+      );
+    }
   };
 
   const dismissAlarm = () => {
@@ -364,6 +399,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!activeAlarm) return;
     const current = activeAlarm;
     setActiveAlarm(null);
+
+    if (isNativeApp()) {
+      void scheduleNativeSnooze(
+        `Snooze: ${current.title}`,
+        `Snoozed reminder from ${current.time}`,
+        minutes
+      );
+    }
 
     setTimeout(() => {
       triggerAlarm(current);
@@ -394,7 +437,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const enableNotifications = async () => {
-    return await requestNotificationPermission();
+    const granted = await requestNotificationPermission();
+    if (granted && isNativeApp()) {
+      await syncAllNativeAlarms(latestStateRef.current.tasks, latestStateRef.current.events);
+    }
+    return granted;
   };
 
   const toggleTask = (id: string) => {
@@ -599,6 +646,7 @@ function calculateFinancials(
 
   const clearAllData = () => {
     completelyWipeLocalStorage();
+    void cancelAllNativeAlarms();
     setState({
       ...INITIAL_APP_STATE,
       userName: state.userName || 'Yo Tyn',
