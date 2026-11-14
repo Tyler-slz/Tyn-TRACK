@@ -75,7 +75,7 @@ interface AppContextValue {
   toggleAlarmVibration: () => void;
   dismissAlarm: () => void;
   snoozeAlarm: (minutes?: number) => void;
-  testAlarm: (sound?: AlarmSoundType) => void;
+  testAlarm: (sound?: AlarmSoundType, skipNotification?: boolean) => void;
   enableNotifications: () => Promise<boolean>;
   isInstallable: boolean;
   isStandalone: boolean;
@@ -361,7 +361,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, minutes * 60 * 1000);
   };
 
-  const testAlarm = (soundOverride?: AlarmSoundType) => {
+  const testAlarm = (soundOverride?: AlarmSoundType, skipNotification: boolean = false) => {
     const selectedSound = soundOverride || alarmSound;
     if (state.alarmSoundEnabled !== false) {
       playChimeSound(selectedSound);
@@ -369,10 +369,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (state.alarmVibrationEnabled !== false) {
       triggerVibration();
     }
-    sendLocalNotification(
-      'Tyn Alarm Test',
-      'Phone vibration and system alerts are working properly.'
-    );
+    if (!skipNotification) {
+      sendLocalNotification(
+        'Tyn Alarm Test',
+        'Phone vibration and system alerts are working properly.'
+      );
+    }
     setActiveAlarm({
       id: 'test-alarm',
       title: 'Reminder preview',

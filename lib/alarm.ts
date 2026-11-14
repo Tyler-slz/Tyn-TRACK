@@ -101,68 +101,153 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
-// Send phone-wide native notification with sound and vibration
-export async function sendLocalNotification(title: string, body: string): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+export interface NotificationDispatchResult {
+  ok: boolean;
+  method: 'service-worker' | 'window' | 'none';
+  permission: NotificationPermission | 'unsupported';
+  swState: string;
+  detail: string;
+}
+
+async function resolveActiveServiceWorker(): Promise<{
+  reg?: ServiceWorkerRegistration;
+  swState: string;
+  error?: string;
+}> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return { swState: 'unsupported', error: 'Service Worker API not available in this browser.' };
+  }
+
+  try {
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      reg = await navigator.serviceWorker.register('/sw.js');
+    }
+
+    if (!reg.active) {
+      const readyWithTimeout = Promise.race<ServiceWorkerRegistration | undefined>([
+        navigator.serviceWorker.ready,
+        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 3500)),
+      ]);
+      const readyReg = await readyWithTimeout;
+      if (readyReg) {
+        reg = readyReg;
+      }
+    }
+
+    const swState = reg?.active
+      ? reg.active.state
+      : reg?.installing
+      ? 'installing'
+      : reg?.waiting
+      ? 'waiting'
+      : 'inactive';
+
+    return { reg, swState };
+  } catch (err: any) {
+    return { swState: 'error', error: err?.message || String(err) };
+  }
+}
+
+// Send phone-wide native notification with diagnostic status
+export async function sendLocalNotificationDetailed(
+  title: string,
+  body: string
+): Promise<NotificationDispatchResult> {
+  if (typeof window === 'undefined') {
+    return { ok: false, method: 'none', permission: 'unsupported', swState: 'ssr', detail: 'Not in browser.' };
+  }
 
   if (!('Notification' in window)) {
-    console.warn('Notification API not supported by this browser.');
-    return false;
+    return {
+      ok: false,
+      method: 'none',
+      permission: 'unsupported',
+      swState: 'n/a',
+      detail: 'This browser does not support Web Notifications. Open Tyn in Google Chrome.',
+    };
   }
 
-  // If permission not yet granted, request it
   if (Notification.permission !== 'granted') {
     if (Notification.permission === 'denied') {
-      console.warn('Notification permission is denied in browser settings.');
-      return false;
+      return {
+        ok: false,
+        method: 'none',
+        permission: 'denied',
+        swState: 'skipped',
+        detail: 'Blocked in browser site settings.',
+      };
     }
     const granted = await requestNotificationPermission();
-    if (!granted) return false;
-  }
-
-  // Primary mechanism for mobile Android PWA: ServiceWorkerRegistration.showNotification
-  if ('serviceWorker' in navigator) {
-    try {
-      let reg = await navigator.serviceWorker.getRegistration();
-      if (!reg) {
-        reg = await navigator.serviceWorker.register('/sw.js');
-      }
-      
-      // Wait for active service worker if ready
-      if (!reg.active) {
-        reg = await navigator.serviceWorker.ready;
-      }
-
-      if (reg && reg.showNotification) {
-        await reg.showNotification(title, {
-          body,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/icon-192.png',
-          vibrate: [400, 150, 400, 150, 800],
-          tag: `tyn-alarm-${Date.now()}`,
-          renotify: true,
-          requireInteraction: true,
-          silent: false,
-        } as any);
-        return true;
-      }
-    } catch (swErr) {
-      console.warn('Service worker showNotification failed, trying fallback:', swErr);
+    if (!granted) {
+      return {
+        ok: false,
+        method: 'none',
+        permission: Notification.permission,
+        swState: 'skipped',
+        detail: 'Permission prompt was dismissed or denied.',
+      };
     }
   }
 
-  // Direct window Notification fallback
+  // Primary mechanism for Android/PWA: ServiceWorkerRegistration.showNotification
+  const { reg, swState, error: swResolveError } = await resolveActiveServiceWorker();
+  let swShowError = swResolveError;
+
+  if (reg && typeof reg.showNotification === 'function') {
+    try {
+      await reg.showNotification(title, {
+        body,
+        icon: '/icons/icon-192.png',
+        vibrate: [400, 150, 400, 150, 800],
+        tag: `tyn-alarm-${Date.now()}`,
+        requireInteraction: true,
+        silent: false,
+      } as NotificationOptions);
+
+      return {
+        ok: true,
+        method: 'service-worker',
+        permission: Notification.permission,
+        swState,
+        detail: 'Notification delivered to Android system.',
+      };
+    } catch (err: any) {
+      swShowError = err?.message || String(err);
+      console.warn('Service worker showNotification failed, trying fallback:', err);
+    }
+  }
+
+  // Direct window Notification fallback (desktop browsers / non-SW contexts)
   try {
     new Notification(title, {
       body,
       icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
       vibrate: [400, 150, 400, 150, 800],
       requireInteraction: true,
-    } as any);
-    return true;
-  } catch (directErr) {
-    console.warn('Direct notification construction failed:', directErr);
-    return false;
+    } as NotificationOptions);
+
+    return {
+      ok: true,
+      method: 'window',
+      permission: Notification.permission,
+      swState,
+      detail: 'Sent via direct browser notification.',
+    };
+  } catch (directErr: any) {
+    const directMsg = directErr?.message || String(directErr);
+    return {
+      ok: false,
+      method: 'none',
+      permission: Notification.permission,
+      swState,
+      detail: `Failed (${swShowError || directMsg}). Make sure you opened Tyn in Chrome, not an in-app browser.`,
+    };
   }
+}
+
+// Send phone-wide native notification with sound and vibration
+export async function sendLocalNotification(title: string, body: string): Promise<boolean> {
+  const result = await sendLocalNotificationDetailed(title, body);
+  return result.ok;
 }

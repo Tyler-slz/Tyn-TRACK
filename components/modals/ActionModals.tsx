@@ -20,7 +20,7 @@ import {
   PiggyBank
 } from 'lucide-react';
 import { Category } from '@/lib/types';
-import { AlarmSoundType, sendLocalNotification } from '@/lib/alarm';
+import { AlarmSoundType, sendLocalNotificationDetailed, triggerVibration } from '@/lib/alarm';
 
 export function ActionModals() {
   const {
@@ -62,12 +62,47 @@ export function ActionModals() {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<string>('default');
   const [testNotifFeedback, setTestNotifFeedback] = useState<string | null>(null);
+  const [delayedTestSeconds, setDelayedTestSeconds] = useState<number | null>(null);
+  const [showPhoneGuide, setShowPhoneGuide] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPermission(Notification.permission);
     }
   }, [activeModal]);
+
+  useEffect(() => {
+    if (delayedTestSeconds === null) return;
+    if (delayedTestSeconds === 0) {
+      setDelayedTestSeconds(null);
+      triggerVibration();
+      void runDiagnosticNotification('Tyn Background Test', 'Notification bar test while outside Tyn!');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDelayedTestSeconds((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [delayedTestSeconds]);
+
+  const runDiagnosticNotification = async (title: string, body: string) => {
+    const res = await sendLocalNotificationDetailed(title, body);
+    setNotifPermission(res.permission);
+    if (res.permission === 'denied') {
+      setTestNotifFeedback(
+        '⚠️ Blocked in Chrome site settings. Tap the 🔒/tune icon next to the URL → Permissions → Notifications → Allow.'
+      );
+      return res;
+    }
+    if (!res.ok) {
+      setTestNotifFeedback(`❌ ${res.detail} (Permission: ${res.permission}, SW: ${res.swState})`);
+      return res;
+    }
+    setTestNotifFeedback(
+      `✓ Sent via ${res.method} (SW: ${res.swState}). If it did not show in your notification bar, check the Infinix/Android guide below.`
+    );
+    return res;
+  };
 
   // Task form state
   const [taskTitle, setTaskTitle] = useState('');
@@ -345,36 +380,44 @@ export function ActionModals() {
                 isDark ? 'bg-[#1D2721] border-[#2A3930]' : 'bg-white border-[#ECECE6]'
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <label className="text-[12px] font-semibold flex items-center space-x-1.5">
                   <Music className="w-3.5 h-3.5 text-[#274E3C]" />
                   <span>Reminder Alarms & Feedback</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    testAlarm();
-                    setTestNotifFeedback('Testing alarm & sending notification to phone bar...');
-                    const sent = await sendLocalNotification(
-                      'Tyn Alarm Test',
-                      'Phone vibration & status bar notification working!'
-                    );
-                    if (typeof window !== 'undefined' && 'Notification' in window) {
-                      setNotifPermission(Notification.permission);
-                      if (Notification.permission === 'denied') {
-                        setTestNotifFeedback('⚠️ Blocked in Chrome settings! Tap 🔒 in address bar → Permissions → Allow.');
-                      } else if (!sent && Notification.permission !== 'granted') {
-                        setTestNotifFeedback('Tap "Allow Phone Notifications" below to permit phone bar alerts.');
-                      } else if (sent) {
-                        setTestNotifFeedback('✓ Sent! Look at your phone notification bar.');
+                <div className="flex items-center space-x-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (delayedTestSeconds !== null) {
+                        setDelayedTestSeconds(null);
+                        setTestNotifFeedback(null);
+                      } else {
+                        setDelayedTestSeconds(5);
+                        setTestNotifFeedback('Swipe home or lock screen now — sending phone notification in 5s...');
                       }
-                    }
-                  }}
-                  className="text-[11px] font-semibold text-[#274E3C] hover:underline flex items-center space-x-1"
-                >
-                  <Volume2 className="w-3 h-3" />
-                  <span>Test Alarm</span>
-                </button>
+                    }}
+                    className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center space-x-1"
+                  >
+                    <Clock className="w-3 h-3" />
+                    <span>{delayedTestSeconds !== null ? `Cancel (${delayedTestSeconds}s)` : '5s Outside Test'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      testAlarm(undefined, true);
+                      setTestNotifFeedback('Testing alarm & sending notification to phone bar...');
+                      await runDiagnosticNotification(
+                        'Tyn Alarm Test',
+                        'Phone vibration & status bar notification working!'
+                      );
+                    }}
+                    className="text-[11px] font-semibold text-[#274E3C] hover:underline flex items-center space-x-1"
+                  >
+                    <Volume2 className="w-3 h-3" />
+                    <span>Test Alarm</span>
+                  </button>
+                </div>
               </div>
 
               {/* Enable Phone System Notifications Button */}
@@ -383,29 +426,23 @@ export function ActionModals() {
                 onClick={async () => {
                   if (typeof window === 'undefined') return;
                   if (!('Notification' in window)) {
-                    setTestNotifFeedback('Notifications are not supported in this browser.');
+                    setTestNotifFeedback('Notifications are not supported in this browser. Open Tyn in Google Chrome.');
                     return;
                   }
                   if (Notification.permission === 'denied') {
                     setTestNotifFeedback(
-                      'Notifications are blocked in Chrome! Tap the 🔒 icon next to tyn-track.vercel.app in the top address bar → Site Settings → Notifications → Allow.'
+                      '⚠️ Notifications are blocked in Chrome! Tap the 🔒 icon next to tyn-track.vercel.app → Site Settings → Notifications → Allow.'
                     );
                     return;
                   }
-                  setTestNotifFeedback('Requesting permission from your phone...');
+                  setTestNotifFeedback('Checking phone notification status...');
                   const granted = await enableNotifications();
                   setNotifPermission(Notification.permission);
                   if (granted) {
-                    setTestNotifFeedback('Permission granted! Sending test notification to phone bar now...');
-                    const sent = await sendLocalNotification(
+                    await runDiagnosticNotification(
                       'Tyn Notification Active',
                       'Alarms will now sound & vibrate on your phone bar.'
                     );
-                    if (sent) {
-                      setTestNotifFeedback('✓ Active! Notification sent to your phone bar.');
-                    } else {
-                      setTestNotifFeedback('Allowed! Check Android Settings → Apps → Chrome → Notifications if blocked.');
-                    }
                   } else {
                     setTestNotifFeedback('Permission was not granted. Please tap Allow on the phone popup.');
                   }
@@ -449,13 +486,35 @@ export function ActionModals() {
               {/* Status or troubleshooting message */}
               {testNotifFeedback && (
                 <div className={`p-2.5 rounded-xl text-[11px] leading-relaxed border ${
-                  testNotifFeedback.includes('Blocked') || testNotifFeedback.includes('⚠️')
+                  testNotifFeedback.includes('Blocked') || testNotifFeedback.includes('⚠️') || testNotifFeedback.includes('❌')
                     ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 font-medium'
                     : 'bg-[#274E3C]/10 border-[#274E3C]/20 text-[#274E3C] dark:text-[#7CC79E]'
                 }`}>
                   {testNotifFeedback}
                 </div>
               )}
+
+              {/* Infinix / Android 14 Notification Bar Fix Guide */}
+              <div className={`rounded-xl border text-[11px] ${
+                isDark ? 'bg-[#161F1A] border-[#26372D] text-[#9BB0A3]' : 'bg-[#FAFBF9] border-[#EDF1EB] text-[#55695B]'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => setShowPhoneGuide(!showPhoneGuide)}
+                  className="w-full px-3 py-2 flex items-center justify-between text-left font-semibold"
+                >
+                  <span>Not showing in Infinix / Android status bar?</span>
+                  <span className="text-[10px] opacity-75">{showPhoneGuide ? 'Hide' : 'Fix Guide'}</span>
+                </button>
+                {showPhoneGuide && (
+                  <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-black/5 dark:border-white/5 leading-relaxed">
+                    <p><b>1. Chrome "Sites" Channel:</b> Phone Settings → Apps → <b>Chrome</b> → Notifications → Notification categories → <b>Sites</b> → set <b>Importance: High/Alert</b> & turn ON <b>Floating / Pop on screen</b> + <b>Status bar</b>.</p>
+                    <p><b>2. Show Silent Icons:</b> Phone Settings → Notification Center → More settings → turn <b>OFF</b> "Hide silent notifications in status bar".</p>
+                    <p><b>3. XOS Battery & Game Mode:</b> Set Chrome & Tyn Battery to <b>Unrestricted</b>, and check Phone Master / XArena isn't blocking notifications.</p>
+                    <p><b>4. Test outside app:</b> Tap <b>"5s Outside Test"</b> above and swipe to your Home screen.</p>
+                  </div>
+                )}
+              </div>
 
               {/* Alarm Chime Sound Toggle */}
               <div
