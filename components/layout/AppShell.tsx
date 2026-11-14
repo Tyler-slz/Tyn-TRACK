@@ -1,13 +1,11 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useApp } from '@/context/AppContext';
 import { TabType } from '@/lib/types';
+import { useMinuteClock } from '@/lib/useMinuteClock';
 import { DashboardView } from '@/components/dashboard/DashboardView';
-import { TodoView } from '@/components/todo/TodoView';
-import { ScheduleView } from '@/components/schedule/ScheduleView';
-import { MoneyView } from '@/components/money/MoneyView';
-import { ActionModals } from '@/components/modals/ActionModals';
 import { AlarmOverlay } from '@/components/alarm/AlarmOverlay';
 import {
   LayoutGrid,
@@ -16,8 +14,47 @@ import {
   Wallet,
 } from 'lucide-react';
 
+function TabLoadingFallback() {
+  return (
+    <div className="p-6 space-y-4 animate-pulse">
+      <div className="h-6 w-32 rounded-lg bg-current opacity-10" />
+      <div className="h-24 w-full rounded-3xl bg-current opacity-10" />
+      <div className="h-24 w-full rounded-3xl bg-current opacity-10" />
+    </div>
+  );
+}
+
+const TodoView = dynamic(
+  () => import('@/components/todo/TodoView').then((m) => m.TodoView),
+  { ssr: false, loading: () => <TabLoadingFallback /> }
+);
+const ScheduleView = dynamic(
+  () => import('@/components/schedule/ScheduleView').then((m) => m.ScheduleView),
+  { ssr: false, loading: () => <TabLoadingFallback /> }
+);
+const MoneyView = dynamic(
+  () => import('@/components/money/MoneyView').then((m) => m.MoneyView),
+  { ssr: false, loading: () => <TabLoadingFallback /> }
+);
+const ActionModals = dynamic(
+  () => import('@/components/modals/ActionModals').then((m) => m.ActionModals),
+  { ssr: false }
+);
+
+function LiveClock({ isDark }: { isDark: boolean }) {
+  const timeStr = useMinuteClock();
+  return (
+    <span
+      suppressHydrationWarning
+      className={`text-[14px] font-bold tracking-tight ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}
+    >
+      {timeStr}
+    </span>
+  );
+}
+
 export function AppShell() {
-  const { activeTab, setActiveTab, currentTimeStr, theme } = useApp();
+  const { activeTab, setActiveTab, activeModal, theme } = useApp();
 
   const isDark = theme === 'dark';
 
@@ -33,6 +70,23 @@ export function AppShell() {
           console.warn('Service Worker registration failed:', err);
         });
     }
+  }, []);
+
+  // Warm lazy-loaded tabs & modals right after Dashboard settles so offline switching stays instant
+  useEffect(() => {
+    const preloadChunks = () => {
+      void import('@/components/todo/TodoView');
+      void import('@/components/schedule/ScheduleView');
+      void import('@/components/money/MoneyView');
+      void import('@/components/modals/ActionModals');
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const idleId = (window as any).requestIdleCallback(preloadChunks, { timeout: 1500 });
+      return () => (window as any).cancelIdleCallback(idleId);
+    }
+    const timer = setTimeout(preloadChunks, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const navItems: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -58,9 +112,7 @@ export function AppShell() {
       >
         {/* Minimalist Top Status Bar (Wifi, Battery, Signal REMOVED per user request) */}
         <div className="pt-3.5 px-7 pb-1 flex items-center justify-between select-none shrink-0 z-30">
-          <span className={`text-[14px] font-bold tracking-tight ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
-            {currentTimeStr}
-          </span>
+          <LiveClock isDark={isDark} />
           <div className="w-2 h-2 rounded-full bg-[#274E3C] opacity-75" />
         </div>
 
@@ -130,7 +182,7 @@ export function AppShell() {
         <AlarmOverlay />
 
         {/* Action Modals for Adding to-dos, events, transactions, and Settings */}
-        <ActionModals />
+        {activeModal && <ActionModals />}
       </div>
     </div>
   );

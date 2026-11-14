@@ -92,12 +92,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [prefilledTime, setPrefilledTime] = useState<string>('12:00');
   const [alarmSound, setAlarmSound] = useState<AlarmSoundType>('zen');
 
-  // Real-time Clock & Date in LOCAL timezone
-  const [nowDate, setNowDate] = useState<Date>(new Date());
-  const [currentTimeStr, setCurrentTimeStr] = useState<string>('9:41');
-  const [currentDateHeader, setCurrentDateHeader] = useState<string>('MONDAY, NOVEMBER 9');
-  const [currentMonthYear, setCurrentMonthYear] = useState<string>('November 2026');
-  const [todayLocalStr, setTodayLocalStr] = useState<string>(getLocalDateString(new Date()));
+  // Date state in LOCAL timezone (updates only on day rollover; minute clock ticks locally in leaf components)
+  const [nowDate, setNowDate] = useState<Date>(() => new Date());
+  const [todayLocalStr, setTodayLocalStr] = useState<string>(() => getLocalDateString(new Date()));
+  const [currentDateHeader, setCurrentDateHeader] = useState<string>(() => getCurrentDateHeader(new Date()));
+  const [currentMonthYear, setCurrentMonthYear] = useState<string>(() => getCurrentMonthYear(new Date()));
+  const currentTimeStr = getCurrentTimeFormatted(nowDate);
 
   // Alarm state
   const [activeAlarm, setActiveAlarm] = useState<ActiveAlarm | null>(null);
@@ -192,20 +192,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state, isHydrated]);
 
-  // Live Clock loop (updates every second)
+  // Date rollover sync (only updates global context once per day at midnight or phone wake)
   useEffect(() => {
-    const updateTime = () => {
+    const syncDateIfChanged = () => {
       const now = new Date();
-      setNowDate(now);
-      setCurrentTimeStr(getCurrentTimeFormatted(now));
-      setCurrentDateHeader(getCurrentDateHeader(now));
-      setCurrentMonthYear(getCurrentMonthYear(now));
-      setTodayLocalStr(getLocalDateString(now));
+      const nextToday = getLocalDateString(now);
+      setTodayLocalStr((prevToday) => {
+        if (prevToday === nextToday) return prevToday;
+        setNowDate(now);
+        setCurrentDateHeader(getCurrentDateHeader(now));
+        setCurrentMonthYear(getCurrentMonthYear(now));
+        return nextToday;
+      });
     };
 
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+    syncDateIfChanged();
+    const interval = setInterval(syncDateIfChanged, 30000);
+    window.addEventListener('visibilitychange', syncDateIfChanged);
+    window.addEventListener('focus', syncDateIfChanged);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', syncDateIfChanged);
+      window.removeEventListener('focus', syncDateIfChanged);
+    };
   }, []);
 
   // Alarm Monitor loop with background wake catch

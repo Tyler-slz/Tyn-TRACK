@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { getCurrentWeekDays, getTodayShort, getLocalDateString } from '@/lib/time';
 import { getGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar';
+import { useMinuteClock } from '@/lib/useMinuteClock';
 import {
   Plus,
   Moon,
@@ -15,7 +16,8 @@ import {
 } from 'lucide-react';
 
 export function ScheduleView() {
-  const { state, openModalWithTime, currentMonthYear, currentTimeStr, nowDate, todayLocalStr, deleteEvent, theme } = useApp();
+  const { state, openModalWithTime, currentMonthYear, nowDate, todayLocalStr, deleteEvent, theme } = useApp();
+  const currentTimeStr = useMinuteClock();
   const isDark = theme === 'dark';
 
   const currentDays = getCurrentWeekDays(nowDate);
@@ -113,7 +115,7 @@ export function ScheduleView() {
         {/* Real-time Indicator Line if viewing today */}
         {selectedDateStr === todayLocalStr && (
           <div className="flex items-center space-x-2 my-1">
-            <span className="text-[11px] font-bold text-[#274E3C] w-12">{currentTimeStr}</span>
+            <span suppressHydrationWarning className="text-[11px] font-bold text-[#274E3C] w-12">{currentTimeStr}</span>
             <div className="flex-1 h-[2px] bg-[#274E3C] rounded-full" />
           </div>
         )}

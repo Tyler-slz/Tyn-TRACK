@@ -60,7 +60,7 @@ export function DashboardView() {
       {/* Top Greeting Header with Theme / Settings Toggle */}
       <div className="flex items-center justify-between pt-1">
         <div>
-          <p className={`text-[11px] font-semibold tracking-widest uppercase ${isDark ? 'text-[#879B90]' : 'text-[#7B867E]'}`}>
+          <p suppressHydrationWarning className={`text-[11px] font-semibold tracking-widest uppercase ${isDark ? 'text-[#879B90]' : 'text-[#7B867E]'}`}>
             {currentDateHeader}
           </p>
           <h1 className={`text-[34px] font-bold tracking-tight leading-tight mt-0.5 ${isDark ? 'text-[#EDEFEA]' : 'text-[#1E2621]'}`}>
