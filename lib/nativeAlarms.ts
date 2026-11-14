@@ -4,14 +4,18 @@ import {
   type LocalNotificationSchema,
 } from '@capacitor/local-notifications';
 import { parseTimeString } from './time';
-import type { CalendarEvent, Task } from './types';
+import { getUpcomingEventOccurrences } from './schedule';
+import type { CalendarEvent, DailyCheckInSettings, MoneyReminder, Task } from './types';
 
 export const TYN_ALARM_CHANNEL_ID = 'tyn-alarms';
 
 const SCHEDULE_EXTRA_SOURCE = 'tyn-schedule';
+const CHECKIN_EXTRA_SOURCE = 'tyn-checkin';
 const TEST_NOTIFICATION_ID = 10;
 const INSTANT_NOTIFICATION_ID = 11;
 const SNOOZE_NOTIFICATION_ID = 12;
+const MORNING_CHECKIN_ID = 20;
+const EVENING_CHECKIN_ID = 21;
 const MAX_SCHEDULED_ALARMS = 180;
 
 let channelReadyPromise: Promise<void> | null = null;
@@ -73,10 +77,25 @@ export async function ensureNativeAlarmChannel(): Promise<void> {
 
 function parseScheduleDate(dateStr?: string, timeStr?: string): Date | null {
   if (!dateStr || !timeStr) return null;
-  const parts = dateStr.split('-').map(Number);
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
   const parsed = parseTimeString(timeStr);
   if (!parsed) return null;
+
+  if (dateStr.trim().toLowerCase() === 'today') {
+    const now = new Date();
+    const target = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      parsed.hours,
+      parsed.minutes,
+      0,
+      0
+    );
+    return Number.isNaN(target.getTime()) ? null : target;
+  }
+
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
 
   const [year, month, day] = parts;
   const target = new Date(year, month - 1, day, parsed.hours, parsed.minutes, 0, 0);
@@ -126,17 +145,29 @@ export async function openNativeExactAlarmSettings(): Promise<'granted' | 'denie
   }
 }
 
+function parse24hTime(timeStr?: string): { hour: number; minute: number } | null {
+  if (!timeStr) return null;
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return { hour, minute };
+}
+
 function buildDesiredAlarms(
   tasks: Task[],
   events: CalendarEvent[],
+  moneyReminders: MoneyReminder[],
+  currencySymbol: string,
   isExact: boolean
 ): LocalNotificationSchema[] {
   const now = Date.now();
   const candidates: Array<{ triggerAt: number; schema: LocalNotificationSchema }> = [];
 
   for (const task of tasks) {
-    if (task.completed || !task.remindMe || !task.dueDate || !task.dueTime) continue;
-    const target = parseScheduleDate(task.dueDate, task.dueTime);
+    if (task.completed || !task.remindMe || !task.dueTime || task.dueTime === 'Anytime') continue;
+    const target = parseScheduleDate(task.dueDate || 'today', task.dueTime);
     if (!target || target.getTime() <= now) continue;
 
     const key = `task-${task.id}`;
@@ -170,20 +201,71 @@ function buildDesiredAlarms(
     });
   }
 
-  for (const event of events) {
-    if (!event.remindMe || !event.date || !event.startTime) continue;
-    const target = parseScheduleDate(event.date, event.startTime);
-    if (!target || target.getTime() <= now) continue;
-
-    const key = `event-${event.id}`;
+  const upcomingOccurrences = getUpcomingEventOccurrences(events, new Date(), 14);
+  for (const { event, occurrenceDate, triggerDate } of upcomingOccurrences) {
+    const key =
+      !event.repeat || event.repeat === 'none'
+        ? `event-${event.id}`
+        : `event-${event.id}-${occurrenceDate}`;
     const body = `${event.startTime}${event.location ? ` · ${event.location}` : ''}`;
     candidates.push({
-      triggerAt: target.getTime(),
+      triggerAt: triggerDate.getTime(),
       schema: {
         id: hashNotificationId(key),
         title: `Tyn Schedule: ${event.title}`,
         body,
         largeBody: event.notes ? `${body} — ${event.notes}` : body,
+        channelId: TYN_ALARM_CHANNEL_ID,
+        smallIcon: 'ic_stat_tyn',
+        iconColor: '#274E3C',
+        foreground: true,
+        autoCancel: true,
+        isExactNotification: isExact,
+        schedule: {
+          at: triggerDate,
+          allowWhileIdle: true,
+        },
+        extra: {
+          source: SCHEDULE_EXTRA_SOURCE,
+          key,
+          kind: 'event',
+          itemId: event.id,
+          occurrenceDate,
+          triggerAt: triggerDate.getTime(),
+          isExact,
+        },
+      },
+    });
+  }
+
+  for (const reminder of moneyReminders) {
+    if (reminder.settled || !reminder.remindMe || !reminder.dueDate || !reminder.dueTime) continue;
+    const target = parseScheduleDate(reminder.dueDate, reminder.dueTime);
+    if (!target || target.getTime() <= now) continue;
+
+    const key = `money-${reminder.id}`;
+    const amountStr = `${currencySymbol}${reminder.amount.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })}`;
+    const titlePrefix =
+      reminder.kind === 'bill'
+        ? `Bill Due: ${reminder.title}`
+        : reminder.kind === 'owe'
+        ? `Pay Back ${reminder.person || reminder.title}`
+        : `Collect from ${reminder.person || reminder.title}`;
+    const body =
+      reminder.kind === 'bill'
+        ? `${amountStr} · Due at ${reminder.dueTime}`
+        : `${reminder.title} · ${amountStr} · ${reminder.dueTime}`;
+
+    candidates.push({
+      triggerAt: target.getTime(),
+      schema: {
+        id: hashNotificationId(key),
+        title: `${titlePrefix} (${amountStr})`,
+        body,
+        largeBody: reminder.note ? `${body} — ${reminder.note}` : body,
         channelId: TYN_ALARM_CHANNEL_ID,
         smallIcon: 'ic_stat_tyn',
         iconColor: '#274E3C',
@@ -197,8 +279,8 @@ function buildDesiredAlarms(
         extra: {
           source: SCHEDULE_EXTRA_SOURCE,
           key,
-          kind: 'event',
-          itemId: event.id,
+          kind: 'money',
+          itemId: reminder.id,
           triggerAt: target.getTime(),
           isExact,
         },
@@ -210,9 +292,74 @@ function buildDesiredAlarms(
   return candidates.slice(0, MAX_SCHEDULED_ALARMS).map((c) => c.schema);
 }
 
+function buildDesiredCheckIns(
+  checkInSettings: DailyCheckInSettings | undefined,
+  isExact: boolean
+): LocalNotificationSchema[] {
+  if (!checkInSettings) return [];
+  const checkIns: LocalNotificationSchema[] = [];
+
+  if (checkInSettings.morningEnabled) {
+    const parsedMorning = parse24hTime(checkInSettings.morningTime) || { hour: 8, minute: 0 };
+    checkIns.push({
+      id: MORNING_CHECKIN_ID,
+      title: 'Good morning! Ready for today?',
+      body: "Check today's tasks, schedule, and any bills due.",
+      channelId: TYN_ALARM_CHANNEL_ID,
+      smallIcon: 'ic_stat_tyn',
+      iconColor: '#274E3C',
+      foreground: true,
+      autoCancel: true,
+      isExactNotification: isExact,
+      schedule: {
+        on: parsedMorning,
+        allowWhileIdle: true,
+      },
+      extra: {
+        source: CHECKIN_EXTRA_SOURCE,
+        kind: 'checkin-morning',
+        onHour: parsedMorning.hour,
+        onMinute: parsedMorning.minute,
+        isExact,
+      },
+    });
+  }
+
+  if (checkInSettings.eveningEnabled) {
+    const parsedEvening = parse24hTime(checkInSettings.eveningTime) || { hour: 21, minute: 0 };
+    checkIns.push({
+      id: EVENING_CHECKIN_ID,
+      title: 'Evening wrap-up',
+      body: "Log today's spending and write One Good Thing.",
+      channelId: TYN_ALARM_CHANNEL_ID,
+      smallIcon: 'ic_stat_tyn',
+      iconColor: '#274E3C',
+      foreground: true,
+      autoCancel: true,
+      isExactNotification: isExact,
+      schedule: {
+        on: parsedEvening,
+        allowWhileIdle: true,
+      },
+      extra: {
+        source: CHECKIN_EXTRA_SOURCE,
+        kind: 'checkin-evening',
+        onHour: parsedEvening.hour,
+        onMinute: parsedEvening.minute,
+        isExact,
+      },
+    });
+  }
+
+  return checkIns;
+}
+
 async function performNativeAlarmSync(
   tasks: Task[],
   events: CalendarEvent[],
+  moneyReminders: MoneyReminder[] = [],
+  checkInSettings?: DailyCheckInSettings,
+  currencySymbol: string = '₱',
   options?: { promptPermissions?: boolean }
 ): Promise<SyncNativeResult> {
   if (!isNativeApp()) {
@@ -235,12 +382,20 @@ async function performNativeAlarmSync(
     }
 
     const canUseExact = status.exactAlarm === 'granted';
-    const desired = buildDesiredAlarms(tasks, events, canUseExact);
+    const desired = [
+      ...buildDesiredAlarms(tasks, events, moneyReminders, currencySymbol, canUseExact),
+      ...buildDesiredCheckIns(checkInSettings, canUseExact),
+    ];
     const desiredMap = new Map(desired.map((n) => [n.id, n]));
 
     const pendingRes = await LocalNotifications.getPending();
     const pendingManaged = pendingRes.notifications.filter(
-      (n) => !n.extra?.source || n.extra.source === SCHEDULE_EXTRA_SOURCE
+      (n) =>
+        !n.extra?.source ||
+        n.extra.source === SCHEDULE_EXTRA_SOURCE ||
+        n.extra.source === CHECKIN_EXTRA_SOURCE ||
+        n.id === MORNING_CHECKIN_ID ||
+        n.id === EVENING_CHECKIN_ID
     );
 
     const toCancel: { id: number }[] = [];
@@ -253,10 +408,13 @@ async function performNativeAlarmSync(
         continue;
       }
       const sameTrigger = existing.extra?.triggerAt === target.extra?.triggerAt;
+      const sameOnTime =
+        existing.extra?.onHour === target.extra?.onHour &&
+        existing.extra?.onMinute === target.extra?.onMinute;
       const sameTitle = existing.title === target.title;
       const sameBody = existing.body === target.body;
-      const sameExact = existing.extra?.isExact === canUseExact;
-      if (sameTrigger && sameTitle && sameBody && sameExact) {
+      const sameExact = existing.extra?.isExact === target.extra?.isExact;
+      if (sameTrigger && sameOnTime && sameTitle && sameBody && sameExact) {
         unchangedIds.add(existing.id);
       } else {
         toCancel.push({ id: existing.id });
@@ -289,11 +447,16 @@ async function performNativeAlarmSync(
 export function syncAllNativeAlarms(
   tasks: Task[],
   events: CalendarEvent[],
+  moneyReminders: MoneyReminder[] = [],
+  checkInSettings?: DailyCheckInSettings,
+  currencySymbol: string = '₱',
   options?: { promptPermissions?: boolean }
 ): Promise<SyncNativeResult> {
   syncQueue = syncQueue
     .catch(() => ({ ok: false, scheduledCount: 0, exactAlarm: 'denied' as const }))
-    .then(() => performNativeAlarmSync(tasks, events, options));
+    .then(() =>
+      performNativeAlarmSync(tasks, events, moneyReminders, checkInSettings, currencySymbol, options)
+    );
   return syncQueue;
 }
 
@@ -445,5 +608,38 @@ export async function cancelAllNativeAlarms(): Promise<void> {
   } catch {
     // Ignore cleanup errors on unsupported states
   }
+}
+
+export function addNativeNotificationTapListener(
+  onNavigate: (kind: string) => void
+): () => void {
+  if (!isNativeApp()) return () => {};
+  let removed = false;
+  let handle: { remove: () => Promise<void> } | null = null;
+
+  void LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+    const kind = event.notification?.extra?.kind;
+    if (typeof kind === 'string' && kind) {
+      onNavigate(kind);
+    }
+  })
+    .then((h) => {
+      if (removed) {
+        void h.remove();
+      } else {
+        handle = h;
+      }
+    })
+    .catch(() => {
+      // Ignore listener errors outside native Android shell
+    });
+
+  return () => {
+    removed = true;
+    if (handle) {
+      void handle.remove();
+      handle = null;
+    }
+  };
 }
 

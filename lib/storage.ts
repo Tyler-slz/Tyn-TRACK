@@ -9,6 +9,14 @@ export const INITIAL_APP_STATE: AppState = {
   events: [],
   transactions: [],
   dailyNotes: [],
+  moneyReminders: [],
+  monthlyBudget: 0,
+  checkInSettings: {
+    morningEnabled: false,
+    morningTime: '08:00',
+    eveningEnabled: false,
+    eveningTime: '21:00',
+  },
   financialSummary: {
     totalBalance: 0,
     monthlyIncome: 0,
@@ -42,7 +50,18 @@ export function loadStoredAppState(): AppState {
       ...parsed,
       alarmSoundEnabled: parsed.alarmSoundEnabled !== undefined ? parsed.alarmSoundEnabled : true,
       alarmVibrationEnabled: parsed.alarmVibrationEnabled !== undefined ? parsed.alarmVibrationEnabled : true,
-      dailyNotes: parsed.dailyNotes || [],
+      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+      events: Array.isArray(parsed.events) ? parsed.events : [],
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+      dailyNotes: Array.isArray(parsed.dailyNotes) ? parsed.dailyNotes : [],
+      moneyReminders: Array.isArray(parsed.moneyReminders) ? parsed.moneyReminders : [],
+      monthlyBudget: typeof parsed.monthlyBudget === 'number' && !Number.isNaN(parsed.monthlyBudget)
+        ? Math.max(0, parsed.monthlyBudget)
+        : 0,
+      checkInSettings: {
+        ...INITIAL_APP_STATE.checkInSettings,
+        ...(parsed.checkInSettings || {}),
+      },
       financialSummary: {
         ...INITIAL_APP_STATE.financialSummary,
         ...(parsed.financialSummary || {}),

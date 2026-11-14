@@ -105,14 +105,14 @@ export function AppShell() {
     >
       {/* Mobile Shell Frame */}
       <div
-        className={`w-full max-w-[430px] min-h-screen sm:min-h-[890px] sm:max-h-[920px] sm:rounded-[44px] sm:shadow-2xl sm:border-[6px] relative flex flex-col overflow-hidden transition-colors duration-300 ${
+        className={`w-full max-w-[430px] min-h-screen sm:min-h-[680px] sm:h-[min(890px,calc(100vh-3rem))] sm:max-h-none sm:rounded-[44px] sm:shadow-2xl sm:border-[6px] relative flex flex-col overflow-hidden transition-colors duration-300 ${
           isDark
             ? 'bg-[#141A17] sm:border-[#1E2621] text-[#EDEFEA]'
             : 'bg-[#FAF8F5] sm:border-[#1E2522] text-[#1E2621]'
         }`}
       >
-        {/* Minimalist Top Status Bar (Wifi, Battery, Signal REMOVED per user request) */}
-        <div className="pt-3.5 px-7 pb-1 flex items-center justify-between select-none shrink-0 z-30">
+        {/* Minimalist Top Status Bar */}
+        <div className="safe-top px-7 pb-1 flex items-center justify-between select-none shrink-0 z-30">
           <LiveClock isDark={isDark} />
           <div className="w-2 h-2 rounded-full bg-[#274E3C] opacity-75" />
         </div>
@@ -127,7 +127,7 @@ export function AppShell() {
 
         {/* Fixed Bottom Navigation Bar */}
         <div
-          className={`fixed sm:absolute bottom-0 inset-x-0 backdrop-blur-md border-t z-40 px-3 pt-2 pb-1.5 transition-colors duration-300 ${
+          className={`fixed sm:absolute bottom-0 inset-x-0 backdrop-blur-md border-t z-40 px-3 pt-2 safe-bottom transition-colors duration-300 ${
             isDark
               ? 'bg-[#141A17]/95 border-[#1E2621]'
               : 'bg-[#FAF8F5]/95 border-[#EAE8E1]'
@@ -168,15 +168,6 @@ export function AppShell() {
               );
             })}
           </nav>
-
-          {/* iOS Bottom Home Bar */}
-          <div className="pt-2 pb-1 flex justify-center">
-            <div
-              className={`w-32 h-1 rounded-full ${
-                isDark ? 'bg-white/20' : 'bg-[#1E2621]/20'
-              }`}
-            />
-          </div>
         </div>
 
         {/* Floating Real-time Alarm Banner Overlay */}
